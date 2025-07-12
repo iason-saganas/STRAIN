@@ -1,0 +1,240 @@
+Finished index: 0
+Current datetime: 2025-06-30 16:55:24.471534
+Task 0
+* apply: 		      0
+* apply Linearization: 	  23041
+* Jacobian: 		  47600
+* Adjoint Jacobian: 	  48472
+
+Finished index: 1
+Current datetime: 2025-06-30 16:58:38.830560
+Task 0
+* apply: 		      0
+* apply Linearization: 	  15294
+* Jacobian: 		  26363
+* Adjoint Jacobian: 	  27090
+
+Finished index: 2
+Current datetime: 2025-06-30 17:00:24.641401
+Task 0
+* apply: 		      0
+* apply Linearization: 	   6274
+* Jacobian: 		  16835
+* Adjoint Jacobian: 	  17474
+
+Finished index: 3
+Current datetime: 2025-06-30 17:01:56.957496
+Task 0
+* apply: 		      0
+* apply Linearization: 	   4338
+* Jacobian: 		  15788
+* Adjoint Jacobian: 	  16297
+
+Finished index: 4
+Current datetime: 2025-06-30 17:02:44.398075
+Task 0
+* apply: 		      0
+* apply Linearization: 	   1380
+* Jacobian: 		   9231
+* Adjoint Jacobian: 	   9638
+
+Finished index: 5
+Current datetime: 2025-06-30 17:03:21.811721
+Task 0
+* apply: 		      0
+* apply Linearization: 	   1429
+* Jacobian: 		   6729
+* Adjoint Jacobian: 	   7129
+
+Finished index: 6
+Current datetime: 2025-06-30 17:03:58.471477
+Task 0
+* apply: 		      0
+* apply Linearization: 	   1972
+* Jacobian: 		   5938
+* Adjoint Jacobian: 	   6573
+
+Finished index: 7
+Current datetime: 2025-06-30 17:04:23.728431
+Task 0
+* apply: 		      0
+* apply Linearization: 	   1290
+* Jacobian: 		   4054
+* Adjoint Jacobian: 	   4665
+
+Finished index: 8
+Current datetime: 2025-06-30 17:04:44.917897
+Task 0
+* apply: 		      0
+* apply Linearization: 	   1179
+* Jacobian: 		   3248
+* Adjoint Jacobian: 	   3804
+
+Finished index: 9
+Current datetime: 2025-06-30 17:05:06.922941
+Task 0
+* apply: 		      0
+* apply Linearization: 	   1350
+* Jacobian: 		   3203
+* Adjoint Jacobian: 	   3930
+
+Finished index: 10
+Current datetime: 2025-06-30 17:05:27.290831
+Task 0
+* apply: 		      0
+* apply Linearization: 	   1275
+* Jacobian: 		   2894
+* Adjoint Jacobian: 	   3518
+
+Finished index: 11
+Current datetime: 2025-06-30 17:05:47.150887
+Task 0
+* apply: 		      0
+* apply Linearization: 	   1578
+* Jacobian: 		   2485
+* Adjoint Jacobian: 	   2964
+
+Finished index: 12
+Current datetime: 2025-06-30 17:06:10.665489
+Task 0
+* apply: 		      0
+* apply Linearization: 	   1981
+* Jacobian: 		   2867
+* Adjoint Jacobian: 	   3399
+
+Finished index: 13
+Current datetime: 2025-06-30 17:06:35.701588
+Task 0
+* apply: 		      0
+* apply Linearization: 	   2193
+* Jacobian: 		   2834
+* Adjoint Jacobian: 	   3648
+
+Finished index: 14
+Current datetime: 2025-06-30 17:06:58.262161
+Task 0
+* apply: 		      0
+* apply Linearization: 	   2019
+* Jacobian: 		   2461
+* Adjoint Jacobian: 	   3339
+
+Finished index: 15
+Current datetime: 2025-06-30 17:07:17.068075
+Task 0
+* apply: 		      0
+* apply Linearization: 	   1735
+* Jacobian: 		   1973
+* Adjoint Jacobian: 	   2707
+
+Finished index: 16
+Current datetime: 2025-06-30 17:07:31.995611
+Task 0
+* apply: 		      0
+* apply Linearization: 	   1289
+* Jacobian: 		   1698
+* Adjoint Jacobian: 	   2210
+
+Finished index: 17
+Current datetime: 2025-06-30 17:07:53.843371
+Task 0
+* apply: 		      0
+* apply Linearization: 	   2083
+* Jacobian: 		   2284
+* Adjoint Jacobian: 	   2932
+
+Finished index: 18
+Current datetime: 2025-06-30 17:08:09.058754
+Task 0
+* apply: 		      0
+* apply Linearization: 	   1305
+* Jacobian: 		   1703
+* Adjoint Jacobian: 	   2273
+
+Finished index: 19
+Current datetime: 2025-06-30 17:08:29.102755
+Task 0
+* apply: 		      0
+* apply Linearization: 	   1956
+* Jacobian: 		   2020
+* Adjoint Jacobian: 	   2807
+
+Finished index: 20
+Current datetime: 2025-06-30 17:09:44.964460
+Task 0
+* apply: 		      0
+* apply Linearization: 	   7335
+* Jacobian: 		   8068
+* Adjoint Jacobian: 	  10273
+
+Finished index: 21
+Current datetime: 2025-06-30 17:10:24.591572
+Task 0
+* apply: 		      0
+* apply Linearization: 	   3141
+* Jacobian: 		   4991
+* Adjoint Jacobian: 	   6362
+
+Finished index: 22
+Current datetime: 2025-06-30 17:10:55.445338
+Task 0
+* apply: 		      0
+* apply Linearization: 	   2189
+* Jacobian: 		   4194
+* Adjoint Jacobian: 	   5033
+
+Finished index: 23
+Current datetime: 2025-06-30 17:11:39.791768
+Task 0
+* apply: 		      0
+* apply Linearization: 	   3541
+* Jacobian: 		   5632
+* Adjoint Jacobian: 	   6923
+
+Finished index: 24
+Current datetime: 2025-06-30 17:12:22.977113
+Task 0
+* apply: 		      0
+* apply Linearization: 	   3346
+* Jacobian: 		   5486
+* Adjoint Jacobian: 	   6882
+
+Finished index: 25
+Current datetime: 2025-06-30 17:12:59.428216
+Task 0
+* apply: 		      0
+* apply Linearization: 	   2667
+* Jacobian: 		   4809
+* Adjoint Jacobian: 	   5886
+
+Finished index: 26
+Current datetime: 2025-06-30 17:13:53.037528
+Task 0
+* apply: 		      0
+* apply Linearization: 	   4811
+* Jacobian: 		   6643
+* Adjoint Jacobian: 	   8004
+
+Finished index: 27
+Current datetime: 2025-06-30 17:14:41.505992
+Task 0
+* apply: 		      0
+* apply Linearization: 	   4150
+* Jacobian: 		   5965
+* Adjoint Jacobian: 	   7505
+
+Finished index: 28
+Current datetime: 2025-06-30 17:16:04.624347
+Task 0
+* apply: 		      0
+* apply Linearization: 	   8106
+* Jacobian: 		   9096
+* Adjoint Jacobian: 	  11652
+
+Finished index: 29
+Current datetime: 2025-06-30 17:16:42.075262
+Task 0
+* apply: 		      0
+* apply Linearization: 	   2940
+* Jacobian: 		   4887
+* Adjoint Jacobian: 	   6057
+
