@@ -1,0 +1,24 @@
+Finished index: 0
+Current datetime: 2025-08-06 18:00:57.109208
+Task 0
+* apply: 		      0
+* apply Linearization: 	    356
+* Jacobian: 		   1755
+* Adjoint Jacobian: 	   1854
+
+Finished index: 1
+Current datetime: 2025-08-06 18:01:02.516604
+Task 0
+* apply: 		      0
+* apply Linearization: 	    190
+* Jacobian: 		    618
+* Adjoint Jacobian: 	    685
+
+Finished index: 2
+Current datetime: 2025-08-06 18:01:16.258138
+Task 0
+* apply: 		      0
+* apply Linearization: 	    708
+* Jacobian: 		   1244
+* Adjoint Jacobian: 	   1369
+

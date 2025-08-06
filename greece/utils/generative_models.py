@@ -323,6 +323,179 @@ def generative_model_broken_power_law(harmonic_space, apply_envelope=True, add_e
 
     return op
 
+def generative_model_continuous_double_power_law(harmonic_space, apply_envelope=True,
+                                                 exact_values_dict:dict=None):
+    """
+
+    EDIT
+    -------
+    What I learned from building this function: The conjugate gradient will blow up (either previous_gamma = INF or
+    alpha ~ curvature < 0) if the power spectrum contains either 0's or almost zero values, something like smaller
+    than 1e-30. I increased the numerical stability of my model by switching from clipping a logistic sigmoid function
+    to using a more 'natural' tanh-based sigmoid function already built-in NIFTy and then checking for samples that
+    the model build this way does not contain such small values.
+
+    A potential problem could still be overflow issues when I do 10^(stuff) (although stuff ~ log10(...)).
+    But during the inference I still get some overflow warnings connected to tmp = np.power(base, v) from the
+    pointwise dictionary.
+
+    Indeed, after running it for some iterations, it again cannot find the descent direction (infinite gamma error).
+    I just tried out to fix c to 100, p0 to 1000 and center alpha and beta more strongly around values +14 and -10
+    respectively (variance of 5); this does not throw a could not find descent direction error.
+    -------
+
+    A smooth version of the broken power law model, such that the dominant frequency can be learned by NIFTy.
+    See desmos graph https://www.desmos.com/calculator/pv2qh01pyg.
+
+    :param harmonic_space:          The codomain to the signal domain.
+    :param apply_envelope:          Whether to apply the correlated field envelope or just leave the wavelet operator
+                                    as is.
+    :param exact_values_dict:       For debugging purposes. Takes a list of exact values to construct the operator from.
+                                    The order of the list should be:
+
+                                    [k0, p0, c, alpha, beta, cfm_envelope_fluctuations,
+                                    cfm_envelope_loglogavgslope], e.g.
+                                        exact_values_dict={
+                                            "k0": 10,
+                                            "p0": 80000,
+                                            "c": 100,
+                                            "alpha": +10,
+                                            "beta": -10,
+                                            "cfm_envelope_fluctuations": 5,
+                                            "cfm_envelope_loglogavgslope": -6}
+
+    :return:
+    """
+    ### --- fixed parameters for now
+    # k_cut_off = 50
+    # normalization_constant = 1e2
+    # message "can not find descent direction"
+    # ---------
+
+    k = harmonic_space.get_unique_k_lengths()
+    power_at_zm = 1e-16  # if this is 0, no kidding, the conjugate gradient scheme in the inference fails.
+    # --- Prior choices
+    prior_choices = {
+        "k0 ": (0, np.max(k)),
+        "p0 ": (1e3, 1e-16),
+        "c ": (100, 1e-16),
+        "alpha ": (+10,100),
+        "beta ": (-10,100),
+        "cfm_envelope_fluctuations ": (4, 2),
+        "cfm_envelope_loglogavgslope ": (-4, 1)
+    }
+    # ---------
+
+    s_dom = harmonic_space.get_default_codomain()
+    p_space = ift.PowerSpace(harmonic_space)
+
+    k[0] = 1  # I do this so np.log10(k) won't diverge at k[0]=0. Later I will set the power at k[0] to a fixed value
+    # anyway.
+
+    k_field = ift.Field(dt(p_space), val=k)
+    gamma_field = ift.Field(dt(p_space), val=np.log10(k))
+    gamma_op = ift.DiagonalOperator(gamma_field)
+
+    k0 = ift.StandardUniformTransform(key="k0 ", upper_bound=prior_choices["k0 "][1]) # don't confuse with k[0], this is the k value where there is a peak in the power spectrum
+    p0 = ift.NormalTransform(*prior_choices["p0 "], key="p0 ")
+    c = ift.NormalTransform(*prior_choices["c "], key="c ")
+    alpha = ift.NormalTransform(*prior_choices["alpha "], key="alpha ")
+    beta = ift.NormalTransform(*prior_choices["beta "], key="beta ")
+
+    if exact_values_dict is not None:
+        [k0_val, p0_val, c_val, alpha_val, beta_val, _, _] = exact_values_dict.values()
+
+        k0 = ift.NormalTransform(key="k0 ", mean=k0_val, sigma=1e-16)
+        p0 = ift.NormalTransform(key="p0 ", mean=p0_val, sigma=1e-16)
+        c = ift.NormalTransform(key="c ", mean=c_val, sigma=1e-16)
+        alpha = ift.NormalTransform(key="alpha ", mean=alpha_val, sigma=1e-16)
+        beta = ift.NormalTransform(key="beta ", mean=beta_val, sigma=1e-16)
+
+    pspace_expander = ift.ContractionOperator(p_space, spaces=0).adjoint
+
+    c = pspace_expander @ c
+    k0 = pspace_expander @ k0
+    p0 = pspace_expander @ p0
+    alpha = pspace_expander @ alpha
+    beta = pspace_expander @ beta
+
+
+    k_field_adder = ift.Adder(a=k_field)
+    add_one = ift.Adder(a=ift.Field(dt(p_space), val=np.ones(p_space.shape[0])))
+    exponent = -c*(k_field_adder(-1*k0))
+
+    C = ClipOperator(domain=exponent.target, clip_above=690, clip_below=-690)  # this value of `clip_above` gives power spectra that
+    # deviate from the power spectra without this clipping operator by a maximum of ~10^-300.
+    sigmoid = add_one(np.exp(C(exponent))).ptw("reciprocal")
+
+    a0 = p0 * ( -alpha * np.log10(k0) ).ptw("exponentiate", 10)
+    b0 = p0 * ( -beta * np.log10(k0) ).ptw("exponentiate", 10)
+
+
+    # test = ift.from_random(exponent.domain)
+    # test2 = exponent(test)
+    # test3 = C(test2)
+    # test4 = test3.ptw("exp")
+    # print("test2.nifty_sigmoid", (-1*test2).ptw("sigmoid"))
+    # print("test4 my sigmoid", add_one(test4).ptw("reciprocal"))
+
+    my_sigmoid = sigmoid
+    nifty_sigmoid = (-1*exponent).ptw("sigmoid")
+    sigmoid_to_use = nifty_sigmoid
+
+    ps = (a0*(gamma_op @ alpha).ptw("exponentiate", 10)-sigmoid_to_use*a0*(gamma_op @ alpha).ptw("exponentiate", 10)
+          + sigmoid_to_use*b0*(gamma_op @ beta).ptw("exponentiate", 10))
+
+    # ps = sigmoid_to_use*(gamma_op @ beta).ptw("exponentiate", 10)
+
+    # for _ in range(10):
+    #     test = ps(ift.from_random(ps.domain)).val
+    #     print("0's in an exemplary pow spec? ", np.any(test < 1e-20))
+    # stop
+
+    integrator = ift.ContractionOperator(p_space, spaces=0)
+    integral = integrator(ps) # scalar
+    integral = pspace_expander @ integral # field
+
+    ps = ps * integral.ptw("reciprocal")
+
+    tmp = np.ones(p_space.shape)
+    tmp[0] = power_at_zm
+    set_zm_power = ift.makeOp(ift.makeField(p_space, tmp))
+
+    # ps = set_zm_power(ps)
+
+    amp_s = np.sqrt(ps)
+
+    pd = ift.PowerDistributor(harmonic_space)
+    amp_s_on_full_space = pd @ amp_s
+
+    xi_s = ift.ducktape(harmonic_space, None,'xi_s')
+    ht = ift.HartleyOperator(domain=s_dom)
+
+    wavelet = ht.adjoint(amp_s_on_full_space * xi_s)
+
+    if apply_envelope:
+        fluctuations = prior_choices["cfm_envelope_fluctuations "]
+        llslope = prior_choices["cfm_envelope_loglogavgslope "]
+        if exact_values_dict is not None:
+            [_, _, _, _, _, cfm_envelope_fluctuations_val, cfm_envelope_loglogavgslope_val] = exact_values_dict.values()
+            fluctuations = (cfm_envelope_fluctuations_val, 1e-16)
+            llslope = (cfm_envelope_loglogavgslope_val, 1e-16)
+        cf_env = ift.SimpleCorrelatedField(target=s_dom, fluctuations=fluctuations, loglogavgslope=llslope,
+                                           offset_mean=None, offset_std=None, flexibility=None, asperity=None,
+                                            prefix="cfm_envelope_", use_uniform_prior_on_fluctuations=False).ptw("exp")
+        op = cf_env * wavelet
+    else:
+        op = wavelet
+
+    op.prior_choices = prior_choices
+    op.ps = ps
+    op.amp = amp_s_on_full_space
+
+
+    return op
+
 
 class SimpleMask(ift.LinearOperator):
     # Implements a mask response
@@ -357,3 +530,45 @@ class SimpleMask(ift.LinearOperator):
             # picks away every second, the first is kept
             values = np.array(x.val)[::self.keep_th]
             return ift.Field(self._target, values)
+
+
+class ClipOperator(ift.EndomorphicOperator):
+    # When applied to a field, resets all field values that are larger than some threshold back to that threshold
+    # itself in order to avoid overflow errors.
+    # E.g. e^600 = some large number, e^700 = overflow error, so do e^C(700) = e^600 = large well-defined number
+    # We use this to build a safe sigmoid operation. NIFTy cannot handle overflow errors (Numpy instead recasts the
+    # overflow in 1/e^x for large x to 0).
+
+    # For exp in 64bits, an overflow happens for an exponent of approximately 700.
+
+    # C = ClipOperator(max=600, min=None, ...)
+    #
+    # C(x) = C([800, 100, 132,...]) = [700, 100, 132, ...]
+    # C.adjoint(y) = C.adjoint([700, 100, 132, ...]) = [700, 100, 132, ...]
+
+    # I.e. the adjoint operation is the identity, although one could think about making this operator unitary,
+    # i.e. letting the adjoint be the inverse so that C.adjoint([700, 100, 132, ...]) = [800, 100, 132,...]
+    # But really, it could also e.g. be that x_original = [1000, 100, 132,...]; so I guess it's better to stick with
+    # the identity operator here.
+
+    def __init__(self, domain, clip_above=None, clip_below=None):
+        self._domain = domain
+        self._target = domain
+        self._capability = self.TIMES | self.ADJOINT_TIMES
+        self.clip_above = clip_above
+        self.clip_below = clip_below
+
+    def apply(self, x, mode):
+        self._check_input(x, mode)
+
+        if mode == self.TIMES:
+            vals = x.val
+            if self.clip_above is not None:
+                vals = np.minimum(vals, self.clip_above)
+            if self.clip_below is not None:
+                vals = np.maximum(vals, self.clip_below)
+            return ift.Field(dt(self._domain), vals)
+
+        elif mode == self.ADJOINT_TIMES:
+            return x
+

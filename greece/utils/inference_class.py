@@ -5,15 +5,17 @@ import nifty8 as ift
 
 def plot_histogram(mean, sigma, n_samples, mode="Lognormal"):
     if mode == "Normal":
-        print("Normal distrubution")
+        print("Normal distribution")
         op = ift.NormalTransform(mean=mean, sigma=sigma, key="Normal for Histogram")
     elif mode == "Lognormal":
+        print("Lognormal distribution")
         op = ift.LognormalTransform(mean=mean, sigma=sigma, key='Lognormal for Histogram', N_copies=0)
     elif mode == "Uniform":
-        raise ValueError("Not implemented")
-        # print("Uniform distribution")
-        # op = ift.StandardUniformTransform(key='Uniform for Histogram', N_copies=0,
-        #                               upper_bound=sigma, shift=mean)
+        lower = mean
+        upper = sigma
+        op = ift.StandardUniformTransform(key='Uniform for Histogram', N_copies=0,
+                                          upper_bound=upper, shift=lower)
+        print("Uniform distribution")
     else:
         raise ValueError("Unknown mode")
 
@@ -22,16 +24,8 @@ def plot_histogram(mean, sigma, n_samples, mode="Lognormal"):
     plt.hist(op_samples, bins=200, label=label, histtype='step', facecolor='white', color="black")
 
     plt.ylabel("Frequency", fontsize=30)
-    plt.xlabel(r"Fluctuation parameter", fontsize=30)
-    # Right-align the text in the legend
-    # special_legend_II()
-    # plt.xlim(-0.1, 1.1)
-    # if save:
-    #     filename = "data_storage/figures/histogram_of_lognormal_distribution"
-    #     plt.tight_layout(pad=2)
-    #     plt.savefig(filename + ".png", pad_inches=1)
-    # if show:
-    # plt.show()
+    plt.xlabel(r"Parameter", fontsize=30)
+
 
 class Mask(ift.LinearOperator):
     # Implements a mask response based on a sampling rate
