@@ -1,0 +1,17 @@
+# Ignore all Python bytecode
+*.pyc
+
+# Ignore folders
+__pycache__/
+data/data_pickle_or_hdf5/
+.venv/
+initial_ideas/outs/
+phase_I/outs/
+phase_I/out2/
+.git_OLD/
+
+# Ignore OS files
+.DS_Store
+
+# Ignore whatever this is
+.idea
