@@ -20,14 +20,14 @@ def pickle_me_this(filename: str, data_to_pickle: object):
 
 
 # -- Turn on interactive plotting
-plt.ion()
+# plt.ion()
 
 # -- Set a GPS time:
 t0 = 1126259462.4    # -- GW150914
 #-- Choose detector as H1, L1, or V1
 
 detector = 'H1'
-strain = unpickle_me_this("../data/data_pickle_or_hdf5/GW150914_strain.pickle")
+strain = unpickle_me_this("/Users/iason/PycharmProjects/STRAIN/data/data_pickle_or_hdf5/GW150914_strain.pickle", absolute_path=True)
 data = 1e19 * strain.value
 
 zero_time = 1126259446  # I got this zero time by looking at the caption of the figure produced by strain.plot().
@@ -37,7 +37,7 @@ onset = t0 - zero_time
 length_of_windows = 2
 
 time_domain_strip, k_lengths, power_spectrum = unpickle_me_this(
-    "../data/data_pickle_or_hdf5/results_from_welch_averaging_data.pickle")
+    "/Users/iason/PycharmProjects/STRAIN/data/data_pickle_or_hdf5/results_from_welch_averaging_data.pickle", absolute_path=True)
 
 signal_strip_idcs = np.where( (time > onset - length_of_windows/2) & ( time < onset + length_of_windows/2) )
 signal_strip_time = time[signal_strip_idcs][:-1]  # im taking away the very last element to have a compatible shape with the power spectrum, shouldn't matter

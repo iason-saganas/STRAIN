@@ -75,7 +75,7 @@ class Mask(ift.LinearOperator):
 
 class ExecuteRGSpaceKL:
     def __init__(self, discrete_time, d, cfm_model_name, n_pix_fac=2, x_fac=2, response="linear mask",
-                 sampling_rate_hz=4096, kl_minimizations=10, fluct=(1,1), llslope=(-4,1),
+                 sampling_rate_hz=4096, kl_minimizations=10, fluct=(1,1), llslope=(-4,1), flex=(1e-16,1e-16),
                  gaussian_noise_level=1e-16, out_dir_name="out_index_my_playground", custom_noise_operator=None,
                  custom_data_space=None, custom_generative_model=None):
         """
@@ -103,6 +103,8 @@ class ExecuteRGSpaceKL:
             Parameters controlling the prior fluctuation amplitude. Default is (1, 1).
         llslope : tuple of float, optional
             Slope range for the log-log power spectrum prior. Default is (-4, 1).
+        flex: tuple of float, optional
+            Degree of non-power law behaviour of power psectrum prior. Default is (1e-16, 1e-16).
         gaussian_noise_level : float, optional
             Assumed level of additive Gaussian noise. Default is 1e-16.
         out_dir_name : str, optional
@@ -128,6 +130,7 @@ class ExecuteRGSpaceKL:
 
         use_rg = True
         if use_rg:
+            custom_data_space = ift.RGSpace(shape=(n_dtps,), distances=length_of_domain/n_dtps)
             self.data_space = custom_data_space
         else:
             self.data_space = ift.UnstructuredDomain(shape=(n_dtps, ))
@@ -140,6 +143,7 @@ class ExecuteRGSpaceKL:
 
         mask_op = Mask(domain=ift.DomainTuple.make((self.domain,)), target=custom_data_space,
                        sampling_rate_hz=sampling_rate_hz, physical_start=x0, physical_end=xf,)
+
         self.R_physical = mask_op
 
         self.posterior_samples = None
@@ -157,7 +161,7 @@ class ExecuteRGSpaceKL:
         self.discrete_domain_values = discrete_time
 
         if custom_generative_model is None:
-            mdl = self._create_model(fluct, llslope, cfm_model_name)
+            mdl = self._create_model(fluct, llslope, flex, cfm_model_name)
             self.model, self._cf = (mdl[0], mdl[1])
         else:
             self.model = custom_generative_model(self.domain_ext, self.domain_values_ext.val)
@@ -171,11 +175,11 @@ class ExecuteRGSpaceKL:
             self._N = custom_noise_operator
 
 
-    def _create_model(self, fluctuations, llslope, cfm_model_name):
+    def _create_model(self, fluctuations, llslope, flex, cfm_model_name):
         s_offset = {
             "offset_mean": 0,
             # "offset_std": (1e-20, 1e-21),
-            "offset_std": (1e-16, 1e-16),
+            "offset_std": (2, 1e-16),
         }
 
         s_fluctuations = {
@@ -183,7 +187,7 @@ class ExecuteRGSpaceKL:
             "fluctuations": (fluctuations[0], fluctuations[1]),
             "loglogavgslope": (llslope[0], llslope[1]),
             # "flexibility": (1., 0.5),
-            "flexibility": (1e-16, 1e-16),
+            "flexibility": (flex[0], flex[1]),
             # "asperity": (5., 0.5),
             "asperity": (1e-16, 1e-16)
         }
@@ -195,36 +199,35 @@ class ExecuteRGSpaceKL:
         s_model_meta_class = s_model  # contains information on the power spectra etc
         s_model = s_model.finalize()  # this is solely the operator chain
         self.prior_parameters = {**s_offset, **s_fluctuations}
-        # self.model = s_model
 
         #### --- ATTEMPT AT ENVELOPE
-        tmp = np.linspace(-5, 5, self.n_pix*self.x_fac)
-
-        shift = ift.NormalTransform(mean=-2.5, sigma=5, key="shift of sinc ")
-        num_of_osc = ift.NormalTransform(mean=0.05, sigma=0.1, key="number of oscillations of sinc ")
-        adapter = ift.NormalTransform(mean=1, sigma=1e-16, key="field adapter ")
-
-        contraction = ift.ContractionOperator(ift.DomainTuple.make(self.domain_ext), spaces=None)
-
-        shift = contraction.adjoint @ shift  # makes multifields out ouf scalar domains
-        num_of_osc = contraction.adjoint @ num_of_osc
-        adapter = contraction.adjoint @ adapter
-
-        x_coord = ift.DiagonalOperator(ift.Field(ift.DomainTuple.make(self.domain_ext), val=tmp))
-        shifted_field = x_coord @ adapter - shift
-
-        shifted_and_scaled_field = shifted_field * num_of_osc.ptw("reciprocal")
-
-        # Build the modulator operator
-        sinc_numerator = shifted_and_scaled_field.ptw("sin")  # sin((x-shift)/num_of_osc)
-        modulator_op = sinc_numerator * shifted_field.ptw("reciprocal")
+        # tmp = np.linspace(-5, 5, self.n_pix*self.x_fac)
+        #
+        # shift = ift.NormalTransform(mean=-2.5, sigma=5, key="shift of sinc ")
+        # num_of_osc = ift.NormalTransform(mean=0.05, sigma=0.1, key="number of oscillations of sinc ")
+        # adapter = ift.NormalTransform(mean=1, sigma=1e-16, key="field adapter ")
+        #
+        # contraction = ift.ContractionOperator(ift.DomainTuple.make(self.domain_ext), spaces=None)
+        #
+        # shift = contraction.adjoint @ shift  # makes multifields out ouf scalar domains
+        # num_of_osc = contraction.adjoint @ num_of_osc
+        # adapter = contraction.adjoint @ adapter
+        #
+        # x_coord = ift.DiagonalOperator(ift.Field(ift.DomainTuple.make(self.domain_ext), val=tmp))
+        # shifted_field = x_coord @ adapter - shift
+        #
+        # shifted_and_scaled_field = shifted_field * num_of_osc.ptw("reciprocal")
+        #
+        # # Build the modulator operator
+        # sinc_numerator = shifted_and_scaled_field.ptw("sin")  # sin((x-shift)/num_of_osc)
+        # modulator_op = sinc_numerator * shifted_field.ptw("reciprocal")
 
         #### ------------
 
         # shift = -2.5
         # num_of_osc = 0.05
         # modulator = ift.DiagonalOperator(ift.Field(s_model.target, val=np.sin((tmp-shift)/num_of_osc)/(tmp-shift)))
-        s_model = modulator_op * s_model
+        # s_model = modulator_op * s_model
         return s_model, s_model_meta_class
 
     def _create_gaussian_likelihood(self):
@@ -296,12 +299,14 @@ class ExecuteRGSpaceKL:
                     return y
                 plt.xlabel("time in seconds")
                 [plt.plot(self.domain_values.val, sl.val) for sl in y]
+                plt.show()
                 return y
             else:
                 if supress_plot:
                     return samples
                 plt.xlabel("time in seconds (extended domain)")
                 [plt.plot(self.domain_values_ext.val, sl.val) for sl in samples]
+                plt.show()
                 return samples
         else:
             op = self.R_physical @ self.X.adjoint @ self.model
@@ -310,7 +315,30 @@ class ExecuteRGSpaceKL:
                 return samples
             for sample in samples:
                 plt.plot(self.discrete_domain_values, sample.val)
+                plt.show()
             return samples
+
+    def plot_power_spectrum_prior_samples(self, num=1):
+        meta_model = self._cf
+        amp = meta_model._a[0]  # taking the first dimension
+        ps = amp
+        dom_r = self.domain_ext
+        dom_h = dom_r.get_default_codomain()
+        unique_k = dom_h.get_unique_k_lengths()
+
+        samples = []
+        for _ in range(num):
+            rnd = ift.from_random(ps.domain)
+            sl = ps(rnd)
+            samples.append(sl.val)
+
+        for sample in samples:
+            plt.plot(unique_k, sample)
+
+        plt.xlabel(r"Unique $|k|$")
+        plt.ylabel("Prior $P_s(|k|)$")
+        plt.loglog()
+        plt.show()
 
     def plot_data_realizations(self, num=3):
         for _ in range(num):
@@ -320,7 +348,7 @@ class ExecuteRGSpaceKL:
     def plot_prior_fluctuations_distribution(self):
         plot_histogram(mean=self.fluct[0], sigma=self.fluct[1], n_samples=1000, mode="Lognormal")
 
-    def plot_pow_spec(self):
+    def plot_posterior_pow_spec(self, show=True):
         a = self._cf.amplitude
         harmonic_samples = list(self.posterior_samples.local_iterator())
         # print("here: ",harmonic_samples[0].domain, harmonic_samples[0].val)
@@ -328,6 +356,7 @@ class ExecuteRGSpaceKL:
         # print("here: ", spectrum_realizations[0].val)
         # print("here: ", spectrum_realizations[0].val[:3])
         # print("here: ", spectrum_realizations[0].val[-3:])
+
 
         arrs = [sp.val for sp in spectrum_realizations]
         mean_pow_spec = np.mean(arrs, axis=0)
@@ -339,15 +368,20 @@ class ExecuteRGSpaceKL:
         for spec in spectrum_realizations:
             plt.plot(k_domain_lengths, spec.val, color="black", alpha=0.3)
 
-        plt.plot(k_domain_lengths, mean_pow_spec, label="Posterior mean pow spec", lw=5)
+        plt.plot(k_domain_lengths, mean_pow_spec, label=r"Posterior mean pow spec $P_s(\mid k \mid)$", lw=5)
         plt.loglog()
 
         plt.xlabel(r"Frequency $\omega$")
         plt.ylabel(r"$P_n(\omega)$")
 
         plt.legend()
-        plt.ylim(1e-7,10)
-        return k_domain_lengths, mean_pow_spec
+        # plt.ylim(1e-7,10)
+        if show:
+            plt.show()
+
+        pspace = spectrum_realizations[0].domain
+        mean_pow_spec_field = ift.Field(pspace, val=mean_pow_spec)
+        return k_domain_lengths, mean_pow_spec_field
 
     def get_mean_pow_spec(self):
         raise NotImplementedError

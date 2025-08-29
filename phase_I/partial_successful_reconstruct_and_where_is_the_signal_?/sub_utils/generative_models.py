@@ -1,6 +1,6 @@
-from phase_I.quickview.partial_successful_reconstruct.utils.config_jupyter_notebooks import *
+from phase_I.utils.config_jupyter_notebooks import *
 import scipy as sc
-from phase_I.quickview.partial_successful_reconstruct.data.style_components.matplotlib_style import *
+# from phase_I.quickview.partial_successful_reconstruct.data.style_components.matplotlib_style import *
 
 nrt_strain_values = np.loadtxt("data/num_rel_template_strain_values.txt") * 1e19
 nrt_time_values = np.loadtxt("data/num_rel_template_time_values.txt") - zero_time

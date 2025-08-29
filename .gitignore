@@ -9,6 +9,9 @@ initial_ideas/outs/
 phase_I/outs/
 phase_I/out2/
 .git_OLD/
+nifty/
+.coverage/
+phase_II/outs/
 
 # Ignore OS files
 .DS_Store
