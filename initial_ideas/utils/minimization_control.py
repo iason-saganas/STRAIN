@@ -27,7 +27,7 @@ def kl_sampling_rate(index: int):
     :param index:
     :return:
     """
-    if index < 20:
-        return 7
-    else:
-        return 30
+    itrs = 7
+    if index > 10:
+        itrs = 30
+    return itrs

@@ -77,7 +77,7 @@ class ExecuteRGSpaceKL:
     def __init__(self, discrete_time, d, cfm_model_name, n_pix_fac=2, x_fac=2, response="linear mask",
                  sampling_rate_hz=4096, kl_minimizations=10, fluct=(1,1), llslope=(-4,1), flex=(1e-16,1e-16),
                  gaussian_noise_level=1e-16, out_dir_name="out_index_my_playground", custom_noise_operator=None,
-                 custom_data_space=None, custom_generative_model=None):
+                 custom_data_space=None, custom_generative_model=None, array_to_apply_to_ps=None):
         """
         Parameters
         ----------
@@ -109,6 +109,8 @@ class ExecuteRGSpaceKL:
             Assumed level of additive Gaussian noise. Default is 1e-16.
         out_dir_name : str, optional
             Where to store the output files. Default is "out_index_my_playground".
+        array_to_apply_to_ps: np.array, optional
+            A numpy array whose values are to be pixelwise multiplied onto the amplitude power spectrum.
         """
 
         x0, xf = (np.min(discrete_time), np.max(discrete_time))
@@ -146,6 +148,7 @@ class ExecuteRGSpaceKL:
 
         self.R_physical = mask_op
 
+        self.array_to_apply_to_ps = array_to_apply_to_ps
         self.posterior_samples = None
         self.kl_minimizations = kl_minimizations
         self.fluct = fluct
@@ -197,7 +200,7 @@ class ExecuteRGSpaceKL:
         s_model.add_fluctuations(**s_fluctuations)
 
         s_model_meta_class = s_model  # contains information on the power spectra etc
-        s_model = s_model.finalize()  # this is solely the operator chain
+        s_model = s_model.finalize(array_to_apply_to_ps=self.array_to_apply_to_ps)  # this is solely the operator chain
         self.prior_parameters = {**s_offset, **s_fluctuations}
 
         #### --- ATTEMPT AT ENVELOPE
@@ -320,7 +323,10 @@ class ExecuteRGSpaceKL:
 
     def plot_power_spectrum_prior_samples(self, num=1):
         meta_model = self._cf
-        amp = meta_model._a[0]  # taking the first dimension
+        try:
+            amp = meta_model._a[0]  # taking the first dimension
+        except AttributeError:
+            amp = self.model.ps
         ps = amp
         dom_r = self.domain_ext
         dom_h = dom_r.get_default_codomain()
@@ -349,7 +355,12 @@ class ExecuteRGSpaceKL:
         plot_histogram(mean=self.fluct[0], sigma=self.fluct[1], n_samples=1000, mode="Lognormal")
 
     def plot_posterior_pow_spec(self, show=True):
-        a = self._cf.amplitude
+        try:
+            a = self._cf.amplitude
+        except AttributeError:
+            # assume double broken power law model
+            a = self.model.ps  # I get confused here, why is in the try statement the amplitude operator used
+            # instead of the square of it? Check the demos again
         harmonic_samples = list(self.posterior_samples.local_iterator())
         # print("here: ",harmonic_samples[0].domain, harmonic_samples[0].val)
         spectrum_realizations = [a.force(sl) for sl in harmonic_samples]
@@ -378,6 +389,8 @@ class ExecuteRGSpaceKL:
         # plt.ylim(1e-7,10)
         if show:
             plt.show()
+        else:
+            plt.close()
 
         pspace = spectrum_realizations[0].domain
         mean_pow_spec_field = ift.Field(pspace, val=mean_pow_spec)
@@ -523,3 +536,341 @@ class NoiseOperatorFromPowerSpectrum(ift.EndomorphicOperator):
     def inverse(self):
         return NoiseOperatorFromPowerSpectrum(self.raw_power_spectrum, self._domain, ptw_function="reciprocal")
 
+
+class ExecuteEasyRGSpaceKL:
+    def __init__(self, discrete_time, d, cfm_model_name, n_pix_fac=2, x_fac=2, response="linear mask",
+                 sampling_rate_hz=4096, kl_minimizations=10, fluct=(1,1), llslope=(-4,1), flex=None,
+                 gaussian_noise_level=1e-16, out_dir_name="out_index_my_playground", custom_noise_operator=None,
+                 custom_data_space=None, custom_generative_model=None, op_to_apply_to_amp=None):
+        """
+
+        A rewrite of ExecuteRGSpaceKL using the SimpleCorrelatedField instead of the multidimensional maker.
+
+        Parameters
+        ----------
+        discrete_time : np.array
+            The x values at which discrete data occur.
+        d : array-like
+            Observed data to be analyzed.
+        cfm_model_name : str
+            What to call the CF ("key").
+        n_pix_fac : int, optional
+            Factor for determining the number of pixels in the reconstruction grid by multiplying this factor
+            onto the number of datapoints. Default is 2.
+        x_fac : int, optional
+            Expansion factor for the spatial domain, s.t. extended domain is of length x_fac * n_pix_fac * len(d).
+             Default is 2.
+        response : str, optional
+            Type of response model to apply (e.g., 'linear mask'). Default is 'linear mask'.
+        sampling_rate_hz : float, optional
+            Data sampling rate in Hertz. Default is 4096. Used to determine which points to mask in the signal domain.
+        kl_minimizations : int, optional
+            Number of KL divergence minimization steps. Default is 10.
+        fluct : tuple of float, optional
+            Parameters controlling the prior fluctuation amplitude. Default is (1, 1).
+        llslope : tuple of float, optional
+            Slope range for the log-log power spectrum prior. Default is (-4, 1).
+        flex: tuple of float, optional
+            Degree of non-power law behaviour of power psectrum prior. Default is (1e-16, 1e-16).
+        gaussian_noise_level : float, optional
+            Assumed level of additive Gaussian noise. Default is 1e-16.
+        out_dir_name : str, optional
+            Where to store the output files. Default is "out_index_my_playground".
+        op_to_apply_to_amp: ift.OpChain, optional
+            An operator that is applied to the amplitude power spectrum. For information on in what way,
+            see modified SimpleCorrelatedField code. Default is None.
+        """
+
+        x0, xf = (np.min(discrete_time), np.max(discrete_time))
+
+        n_dtps = len(d)
+        n_pix = n_pix_fac * n_dtps
+
+        print("ExecuteEasyRGSpaceKL log")
+        print("\tNumber of datapoints: ", n_dtps)
+        print("\tConstructing RGspace of this number of points: ", n_pix, " (not extended)")
+
+        length_of_domain = xf - x0
+
+        self.out_dir_name = out_dir_name
+        self.distances =  length_of_domain / n_pix
+        self.x_fac = x_fac
+
+        self.domain = ift.RGSpace(shape=(n_pix,), distances=self.distances)
+        self.domain_ext = ift.RGSpace(shape=(n_pix*x_fac,), distances=self.distances)
+
+        use_rg = True
+        if use_rg:
+            custom_data_space = ift.RGSpace(shape=(n_dtps,), distances=length_of_domain/n_dtps)
+            self.data_space = custom_data_space
+        else:
+            self.data_space = ift.UnstructuredDomain(shape=(n_dtps, ))
+        self.data_field = ift.Field(ift.DomainTuple.make((self.data_space,)),  val=d)
+
+        self.X = ift.FieldZeroPadder(self.domain, new_shape=(n_pix*x_fac, ))
+
+        if response != "linear mask":
+            raise ValueError("Not implemented yet")
+
+        mask_op = Mask(domain=ift.DomainTuple.make((self.domain,)), target=custom_data_space,
+                       sampling_rate_hz=sampling_rate_hz, physical_start=x0, physical_end=xf,)
+
+        self.R_physical = mask_op
+
+        self.op_to_apply_to_amp = op_to_apply_to_amp
+        self.posterior_samples = None
+        self.kl_minimizations = kl_minimizations
+        self.fluct = fluct
+        self.llslope = llslope
+        self.cfm_model_name = cfm_model_name
+        self.gaussian_noise_level = gaussian_noise_level
+        self.prior_parameters = None
+        self.n_dtps = n_dtps
+        self.n_pix = n_pix
+
+        self.domain_values = ift.Field(ift.DomainTuple.make(self.domain), np.linspace(x0, xf, n_pix))
+        self.domain_values_ext = ift.Field(ift.DomainTuple.make(self.domain_ext), np.linspace(x0, (xf-x0)*x_fac+x0, n_pix*x_fac))
+        self.discrete_domain_values = discrete_time
+
+        if custom_generative_model is None:
+            self.model = self._create_model(fluct, llslope, flex, cfm_model_name)
+        else:
+            self.model = custom_generative_model(self.domain_ext, self.domain_values_ext.val)
+            self._cf = None
+
+        self._R_full = self.R_physical @ self.X.adjoint @ self.model
+
+        if custom_noise_operator is None:
+            self._N = ift.ScalingOperator(self.data_field.domain, gaussian_noise_level, sampling_dtype=np.float64)
+        else:
+            self._N = custom_noise_operator
+
+
+
+    def _create_model(self, fluctuations, llslope, flex, cfm_model_name):
+
+        insert_flex = None if not flex else (flex[0], flex[1])
+        args = {"offset_mean":0,
+            "offset_std":(2, 1e-16),
+            "fluctuations":(fluctuations[0], fluctuations[1]),
+            "flexibility": insert_flex,
+            "asperity": None,
+            "loglogavgslope":(llslope[0], llslope[1]),
+        }
+
+        s = ift.SimpleCorrelatedField(
+            target=self.domain_ext,
+            use_uniform_prior_on_fluctuations=False,
+            prefix=cfm_model_name,
+            op_to_apply_to_amp=self.op_to_apply_to_amp,
+            **args
+        )
+
+        s_model = s
+
+        args_with_name = {f"{cfm_model_name}{k}": v for k, v in args.items()}
+        self.prior_parameters = {**args_with_name}
+
+        return s_model
+
+    def _create_gaussian_likelihood(self):
+        N = self._N
+        R = self._R_full
+        likelihood_energy = ift.GaussianEnergy(self.data_field, N.inverse) @ R
+        return likelihood_energy
+
+    def _execute_kl(self, lh_energy, kl_minimizations = 10):
+
+        posterior_samples = ift.optimize_kl(
+            likelihood_energy=lh_energy,
+            total_iterations=kl_minimizations,
+            n_samples=kl_sampling_rate,
+            kl_minimizer=descent_finder,
+            sampling_iteration_controller=ic_sampling_lin,
+            nonlinear_sampling_minimizer=geoVI_sampling_minimizer,
+            output_directory=self.out_dir_name,
+            return_final_position=False,
+            resume=True)
+
+        print("Posterior samples saved. Analyze via class.plot_posterior()")
+        self.posterior_samples = posterior_samples
+
+    def run(self):
+        print("Creating Gaussian likelihood...")
+        lh_energy = self._create_gaussian_likelihood()
+        print("Created Gaussian likelihood, running KL.")
+        self._execute_kl(lh_energy, kl_minimizations=self.kl_minimizations)
+
+    def plot_posterior(self, plot_signal_space=False, plot_with_variance=False):
+        if self.posterior_samples is None:
+            raise ValueError("Execute `run` first")
+
+        s_m, s_v = self.posterior_samples.sample_stat(self.model)
+
+        if plot_signal_space:
+            if plot_with_variance:
+                plt.errorbar(self.domain_values.val, self.X.adjoint(s_m).val, yerr=np.sqrt(self.X.adjoint(s_v).val), color="b", ecolor="b", label="Posterior mean")
+            else:
+                plt.plot(self.domain_values.val, self.X.adjoint(s_m).val, "b.", label="Posterior mean")
+            plt.plot(self.discrete_domain_values, self.data_field.val, "r.", label="Data")  # DATA
+
+        else:
+            if not isinstance(self._N, ift.ScalingOperator):
+                res = self.data_field - self.R_physical(self.X.adjoint(s_m))
+                chi_sq = res.val.T @ self._N.inverse(res).val / self.n_dtps
+            else:
+                res_sq = (self.data_field.val - self.R_physical(self.X.adjoint(s_m)).val)**2
+                chi_sq = np.sum(res_sq) / (self.gaussian_noise_level * self.n_dtps)
+            print("chi_sq reduced in dataspace: ", chi_sq)
+            plt.plot(self.discrete_domain_values, self.data_field.val, "r.", lw=0, label="Data")  # DATA
+            plt.plot(self.discrete_domain_values, self.R_physical(self.X.adjoint(s_m)).val, "b.", lw=0, label="Data from posterior mean")
+
+        plt.legend()
+        plt.xlabel('Time (s)')
+        plt.ylabel('Strain $[10^{-19}]$')
+        plt.title("Reconstruction")
+        plt.show()
+
+    def plot_prior_samples(self, num=5, plot_in_data_space=False, apply_adjoint_zp = True, supress_plot = False):
+        plt.ylabel("strain $[10^{-19}]$")
+        if not plot_in_data_space:
+            op = self.model
+            samples = list(op(ift.from_random(op.domain)) for _ in range(num))
+            if apply_adjoint_zp:
+                y = [self.X.adjoint(sl) for sl in samples]
+                if supress_plot:
+                    return y
+                plt.xlabel("time in seconds")
+                [plt.plot(self.domain_values.val, sl.val) for sl in y]
+                plt.show()
+                return y
+            else:
+                if supress_plot:
+                    return samples
+                plt.xlabel("time in seconds (extended domain)")
+                [plt.plot(self.domain_values_ext.val, sl.val) for sl in samples]
+                plt.show()
+                return samples
+        else:
+            op = self.R_physical @ self.X.adjoint @ self.model
+            samples = list(op(ift.from_random(op.domain)) for _ in range(num))
+            if supress_plot:
+                return samples
+            for sample in samples:
+                plt.plot(self.discrete_domain_values, sample.val)
+                plt.show()
+            return samples
+
+    def plot_power_spectrum_prior_samples(self, num=1):
+        mdl = self.model
+        try:
+            ps = mdl.amplitude**2  # we want POWER spectrum samples
+        except AttributeError:
+            ps = self.model.ps
+
+        dom_r = self.domain_ext
+        dom_h = dom_r.get_default_codomain()
+        unique_k = dom_h.get_unique_k_lengths()
+
+        samples = []
+        for _ in range(num):
+            rnd = ift.from_random(ps.domain)
+            sl = ps(rnd)
+            samples.append(sl.val)
+
+        for sample in samples:
+            plt.plot(unique_k, sample, ".")
+
+        plt.xlabel(r"Unique $|k|$")
+        plt.ylabel("Prior $P_s(|k|)$")
+        plt.loglog()
+        plt.show()
+
+    def plot_data_realizations(self, num=3):
+        for _ in range(num):
+            data_realization = self._R_full(ift.from_random(self.model.domain)) + self._N.draw_sample()
+            plt.plot(self.discrete_domain_values, data_realization.val)
+
+    def plot_prior_fluctuations_distribution(self):
+        plot_histogram(mean=self.fluct[0], sigma=self.fluct[1], n_samples=1000, mode="Lognormal")
+
+    def plot_posterior_pow_spec(self, show=True):
+        try:
+            a = self.model.amplitude
+        except AttributeError:
+            # assume double broken power law model
+            a = np.sqrt(self.model.ps)
+        harmonic_samples = list(self.posterior_samples.local_iterator())
+        # print("here: ",harmonic_samples[0].domain, harmonic_samples[0].val)
+        spectrum_realizations = [a.force(sl) for sl in harmonic_samples]
+        # print("here: ", spectrum_realizations[0].val)
+        # print("here: ", spectrum_realizations[0].val[:3])
+        # print("here: ", spectrum_realizations[0].val[-3:])
+
+
+        arrs = [sp.val for sp in spectrum_realizations]
+        mean_pow_spec = np.mean(arrs, axis=0)
+
+        all_k_domains = [spec.domain[0].k_lengths for spec in spectrum_realizations]
+        k_domain_lengths = all_k_domains[0]
+        # print("Are all k-domains the same?", np.all(all_k_domains == all_k_domains[0]))
+
+        for spec in spectrum_realizations:
+            plt.plot(k_domain_lengths, spec.val, color="black", alpha=0.3)
+
+        plt.plot(k_domain_lengths, mean_pow_spec, label=r"Posterior mean amplitude spec $P_a(\mid k \mid)$", lw=5)
+        plt.loglog()
+
+        plt.xlabel(r"Frequency $\omega$")
+        plt.ylabel(r"$P_n(\omega)$")
+
+        plt.legend()
+        # plt.ylim(1e-7,10)
+        if show:
+            plt.show()
+        else:
+            plt.close()
+
+        pspace = spectrum_realizations[0].domain
+        mean_pow_spec_field = ift.Field(pspace, val=mean_pow_spec)
+        return k_domain_lengths, mean_pow_spec_field
+
+    def get_posterior_parameters(self):
+        latent_posterior_samples = list(self.posterior_samples.local_iterator())
+
+        modes = {"loglogavgslope": "normal", "fluctuations": "lognormal"}
+
+        dictionary = {}
+        prior_choices = self.prior_parameters
+        for lt_s in latent_posterior_samples:
+            values = lt_s.val
+            for key in values.keys():
+                try:
+                    prior_mean = prior_choices[key][0]
+                    prior_sigma = prior_choices[key][1]
+                    posterior_xi = values[key]
+
+                    apply_mode = "None"
+                    for mode in modes.keys():
+                        if mode in key:
+                            apply_mode = modes[mode]
+
+                    res = posterior_xi * prior_sigma + prior_mean
+
+                    if apply_mode == "lognormal":
+                        res = np.exp(res)
+
+                    if key not in dictionary:
+                        dictionary[key] = []
+                    dictionary[key].append(res)
+                except KeyError as err:
+                    print("Ignoring key ", err, " since not found in prior parameters.")
+
+        posterior_values = {k: (np.mean(v), np.std(v)) for k, v in dictionary.items()}
+
+        print("\n\n------------------------")
+        for key in posterior_values.keys():
+            print(key, " : ", posterior_values[key][0], " ± ", posterior_values[key][1])
+        print("------------------------\n\n")
+
+        return posterior_values

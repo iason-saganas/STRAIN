@@ -138,7 +138,7 @@ def mirror_negative_frequencies(arr, standard_order:bool, unique_k_lengths=False
 def visualize_stress(stress_matrix, rows, cols):
     plt.figure(figsize=(8,6))
     plt.imshow(stress_matrix, origin='lower', aspect='auto',
-               extent=[np.min(cols), np.max(cols), np.min(rows), np.max(rows)],
+               # extent=[np.min(cols), np.max(cols), np.min(rows), np.max(rows)],
                cmap='viridis', interpolation='nearest')
     plt.colorbar(label='Stress')
     plt.xlabel('Time [s]')
