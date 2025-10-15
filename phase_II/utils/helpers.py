@@ -3,6 +3,7 @@ import nifty8 as ift
 import pickle
 import warnings
 from matplotlib.patches import Rectangle
+from scipy.interpolate import interp1d
 from scipy.signal.windows import tukey
 from scipy.signal import butter, filtfilt
 
@@ -18,6 +19,7 @@ def usual_plot(xl=r"Time $t$ $\mathrm{[sec]}$", yl=r"Strain $h$ $\mathrm{[10^{-1
     if show:
         if labels != ([], []):
             plt.legend()
+        plt.tight_layout()
         plt.show()
 
 import numpy as np
@@ -525,7 +527,7 @@ def Stress(xi_field: ift.Field, supress_print=False):
     return S_mat, t_dual, f
 
 
-def visualize_stress(stress_matrix, rows, cols, tl="", hlines=None):
+def visualize_stress(stress_matrix, rows, cols, tl="", hlines=None, vlines=None):
 
     stress_matrix = stress_matrix.real
 
@@ -543,7 +545,9 @@ def visualize_stress(stress_matrix, rows, cols, tl="", hlines=None):
                cmap='viridis', interpolation='nearest')
 
     if hlines is not None:
-        plt.hlines(hlines, 0, 1.75, color="r", ls="-")
+        plt.hlines(hlines, 0, np.max(cols), color="r", ls="-")
+    if vlines is not None:
+        plt.vlines(vlines, 0, np.max(rows), color="r", ls="-")
     plt.colorbar(label='Stress')
     plt.xlabel('Time [s]')
     plt.ylabel('Frequency [s]')
@@ -553,7 +557,7 @@ def visualize_stress(stress_matrix, rows, cols, tl="", hlines=None):
 
 
 def generative_gaussian_comb(x_field: ift.Field, position_of_peaks:np.array, amplitude_of_peaks:np.array, half_width_of_peaks:np.array,
-                             rel_sigma_lognormal=.1, rel_sigma_normal=0.5):
+                             rel_sigma_lognormal=.1, rel_sigma_normal=0.5, vary_amplitudes=True, vary_positions=True):
     """
 
     In the future, we probably should replace this with a probabilistic framework, an IFT-based peak finding algorithm;
@@ -577,28 +581,46 @@ def generative_gaussian_comb(x_field: ift.Field, position_of_peaks:np.array, amp
     :return: An operator that produces a Gaussian comb with parameters being each position, amplitude and width of the
              peaks.
     """
+
+    expander = ift.ContractionOperator(x_field.domain, spaces=0).adjoint
+
     list_of_single_gaussians = []
     running_idx = -1
     for f_cen, amplitude, f_half_width in zip(position_of_peaks, amplitude_of_peaks, half_width_of_peaks):
         running_idx += 1
 
-        # amp = ift.NormalTransform(mean=amplitude, sigma=amplitude*rel_sigma_normal, key=f"gauss_peak_{running_idx}_amp", N_copies=0)
+        norm_ampl = 1
+        norm_pos = 1
+        if not vary_amplitudes:
+            norm_ampl = 1e-100
+        if not vary_positions:
+            norm_pos = 1e-100
+
+
+        # amp = ift.NormalTransform(mean=amplitude, sigma=amplitude * rel_sigma_normal * norm_ampl, key=f"gauss_peak_{running_idx}_amp", N_copies=0)
+        # amp = ift.NormalTransform(mean=0, sigma=1, key=f"gauss_peak_{running_idx}_amp", N_copies=0)
+        # amp = np.sqrt(amp**2)
+
         # peak_center = ift.NormalTransform(mean=f_cen, sigma=f_cen*rel_sigma_normal, key=f"gauss_peak_{running_idx}_center", N_copies=0)
 
-        amp = ift.LognormalTransform(mean=amplitude, sigma=amplitude*rel_sigma_lognormal, key=f"gauss_peak_{running_idx}_amp", N_copies=0)
         sigma = ift.LognormalTransform(mean=f_half_width, sigma=f_half_width*rel_sigma_lognormal, key=f"gauss_peak_{running_idx}_sigma", N_copies=0)
-        peak_center = ift.LognormalTransform(mean=f_cen, sigma=f_cen*rel_sigma_lognormal, key=f"gauss_peak_{running_idx}_center", N_copies=0)
+        # sigma = ift.LognormalTransform(mean=1, sigma=1, key=f"gauss_peak_{running_idx}_sigma", N_copies=0)
+        amp = ift.LognormalTransform(mean=amplitude, sigma=amplitude*rel_sigma_lognormal * norm_ampl, key=f"gauss_peak_{running_idx}_amp", N_copies=0)
+        peak_center = ift.LognormalTransform(mean=f_cen, sigma=f_cen*rel_sigma_lognormal * norm_pos, key=f"gauss_peak_{running_idx}_center", N_copies=0)
 
 
 
-        expander = ift.ContractionOperator(x_field.domain, spaces=0).adjoint
         amp, peak_center, sigma = (expander @ amp, expander @ peak_center, expander @ sigma)
 
         x_adder = ift.Adder(a=x_field, neg=True)
         kernel = ( x_adder(peak_center) * sigma.ptw("reciprocal") ) ** 2
         gaussian = amp * (-1/2 * kernel).ptw("exp")
 
-        list_of_single_gaussians.append(gaussian)
+        base_factor = 0
+        base = ift.Adder(ift.makeField(domain=gaussian.target, arr= base_factor * np.ones(len(x_field.val))))
+        gaussian_with_base = base(gaussian)  # for stability
+
+        list_of_single_gaussians.append(gaussian_with_base)
 
     op = None
     for idx, op_i in enumerate(list_of_single_gaussians):
@@ -608,6 +630,81 @@ def generative_gaussian_comb(x_field: ift.Field, position_of_peaks:np.array, amp
             op = op + op_i
 
     return op
+
+
+def generative_lorentzian_comb(x_field: ift.Field, position_of_peaks:np.array, amplitude_of_peaks:np.array, half_width_of_peaks:np.array,
+                             rel_sigma_lognormal=.1, rel_sigma_normal=0.5, vary_amplitudes=True, vary_positions=True):
+    """
+
+    In the future, we probably should replace this with a probabilistic framework, an IFT-based peak finding algorithm;
+    although being FAST would be nice. Ask in the group.
+
+        gaussian = amp * np.exp(-0.5 * ((f - freq_center) / freq_width) ** 2)
+        list_of_single_gaussians.append(gaussian)
+
+        return sum(list_of_single_gaussians)
+
+    :param rel_sigma_normal:                    How large is the standard deviation of normal transforms in terms of
+                                                the mean.
+    :param rel_sigma_lognormal:                 Same but for lognormals.
+    :param x_field:                             The field values over which the comb is defined such that x_field.domain
+                                                gives the domain in which everything takes place (e.g. power or harmonic
+                                                domain).
+    :param position_of_peaks:                   Human guess of position of peaks.
+    :param amplitude_of_peaks:                  Human guess of amplitude of peaks.
+    :param half_width_of_peaks:                      Human guess of the frequency HALF-width of peaks.
+
+    :return: An operator that produces a Gaussian comb with parameters being each position, amplitude and width of the
+             peaks.
+    """
+
+    expander = ift.ContractionOperator(x_field.domain, spaces=0).adjoint
+
+    list_of_single_lorentzians = []
+    running_idx = -1
+    for f_cen, amplitude, f_half_width in zip(position_of_peaks, amplitude_of_peaks, half_width_of_peaks):
+        running_idx += 1
+
+        norm_ampl = 1
+        norm_pos = 1
+        if not vary_amplitudes:
+            norm_ampl = 1e-100
+        if not vary_positions:
+            norm_pos = 1e-100
+
+
+        amp = ift.NormalTransform(mean=amplitude, sigma=amplitude * rel_sigma_normal * norm_ampl, key=f"gauss_peak_{running_idx}_amp", N_copies=0)
+        # amp = ift.NormalTransform(mean=0, sigma=1, key=f"gauss_peak_{running_idx}_amp", N_copies=0)
+        amp = np.sqrt(amp**2)
+
+        # peak_center = ift.NormalTransform(mean=f_cen, sigma=f_cen*rel_sigma_normal, key=f"gauss_peak_{running_idx}_center", N_copies=0)
+
+        sigma = ift.LognormalTransform(mean=f_half_width, sigma=f_half_width*rel_sigma_lognormal, key=f"gauss_peak_{running_idx}_sigma", N_copies=0)
+        # amp = ift.LognormalTransform(mean=amplitude, sigma=amplitude*rel_sigma_lognormal * norm_ampl, key=f"gauss_peak_{running_idx}_amp", N_copies=0)
+        peak_center = ift.LognormalTransform(mean=f_cen, sigma=f_cen*rel_sigma_lognormal * norm_pos, key=f"gauss_peak_{running_idx}_center", N_copies=0)
+
+
+
+        amp, peak_center, sigma  = (expander @ amp, expander @ peak_center, expander @ sigma)
+
+        x_adder = ift.Adder(a=x_field, neg=False)
+        helper_variable = x_adder(-1*peak_center) * 2 * sigma.ptw("reciprocal")
+
+        add_one = ift.Adder(a=ift.makeField(domain=helper_variable.target, arr=np.ones(len(x_field.val))))
+
+        lorentzian = amp * (add_one(helper_variable ** 2)).ptw("reciprocal")
+        list_of_single_lorentzians.append(lorentzian)
+
+    op = None
+    for idx, op_i in enumerate(list_of_single_lorentzians):
+        if idx == 0:
+            op = op_i
+        else:
+            op = op + op_i
+
+    strength_of_comb = ift.LognormalTransform(mean=1, sigma=1, key="comb_global_amplitude", N_copies=0)
+    strength_of_comb = expander @ strength_of_comb
+    return strength_of_comb * op
 
 
 def welch_average(x, y, L, leave_out=None, debug=False, tapering_function=None,
@@ -691,13 +788,13 @@ def welch_average(x, y, L, leave_out=None, debug=False, tapering_function=None,
     collection_of_small_datasets_times = []
 
     for left_lim, right_lim in zip(lf_edges_ds1, r_edges_ds1):
-        idcs = np.where((x > left_lim) & (x < right_lim))
+        idcs = np.where((x >= left_lim) & (x <= right_lim))
         collection_of_small_datasets_strain.append(y[idcs])
         collection_of_small_datasets_times.append(x[idcs])
 
     if leave_out is not None:
         for left_lim, right_lim in zip(lf_edges_ds2, r_edges_ds2):
-            idcs = np.where((x > left_lim) & (x < right_lim))
+            idcs = np.where((x >= left_lim) & (x <= right_lim))
             collection_of_small_datasets_strain.append(y[idcs])
             collection_of_small_datasets_times.append(x[idcs])
     else:
@@ -719,7 +816,9 @@ def welch_average(x, y, L, leave_out=None, debug=False, tapering_function=None,
 
 
     n_dtps = len(collection_of_small_datasets_times[0])
-    time_domain = ift.RGSpace((n_dtps,), distances=L / n_dtps)
+    dx = L/(n_dtps-1)
+
+    time_domain = ift.RGSpace((n_dtps,), distances=dx)
     F = ift.FFTOperator(_dt(time_domain))
 
     data_fields = [ift.Field(_dt(time_domain), val=small_data) for small_data in collection_of_small_datasets_strain_windowed]
@@ -830,9 +929,10 @@ def whiten(y:np.array, amp:np.array, tapering_function = None):
     """
 
     :param y:                       The real-space data to whiten.
-    :param amp:                     The custom amplitude spectrum to whiten with.
+    :param amp:                     The custom amplitude spectrum to whiten with over the full harmonic domain.
     :param tapering_function:       The tapering function to use; default is a Tukey window.
-    :return:
+
+    :return: The whitened data in real space. Normalization probably something like *N.
     """
     if tapering_function is None:
         tapering_function = lambda d: tukey(M=len(d), alpha=0.1, sym=True)
@@ -854,4 +954,226 @@ def bandpass(x, y, bp=(35, 350)):
     return strain_bp
 
 
+def check_quality_of_psd_by_whitening(x, y_field:ift.Field, asd_on_power_space:ift.Field, plot_wh_and_bp=False, plot_stress_of_wh_data=False,
+                                      cut_x=None, notes=""):
+    """
+    CHAT GPT! Check again.
+    :param x:                       The time array.
+    :param y_field:                 The real space y values input as a field.
+    :param asd_on_power_space:      The inferred AMPLITUDE spectral density describing the data as power space field.
+    :param cut_x:                   If y is periodic, likely achieved through zero-padding. cut_x can be given as max(time)
+                                    where time is the array containing the sampling times of the actual non-extended data.
+                                    This cut will be considered in plots (vertical lines etc.).
+    :param notes:                   Notes
+    :param plot_stress_of_wh_data:
+    :param plot_wh_and_bp:
+    :return:
+    """
 
+    y = y_field.val
+    real_space = y_field.domain[0]
+    h_space = real_space.get_default_codomain()
+
+    # sanity checks
+    dt = x[1] - x[0]
+    n = y_field.domain[0].shape[0]
+    assert n == len(x) == len(y), "length mismatch"
+    pd = ift.PowerDistributor(target=h_space)
+    full_amp = pd(asd_on_power_space)
+    asd = full_amp.val
+    assert len(asd) == n, "asd length mismatch; is asd power or amplitude?"
+
+    y_is_periodic = (y[0] == y[-1])
+    if not y_is_periodic:
+        print("\tThe input array is not periodic, tapering function will be applied. y[0] vs y[-1]: ", y[0], y[-1])
+        tapering_function = None
+    else:
+        tapering_function = lambda x: x  # unity
+
+    whitened_y = whiten(y=y, amp=asd, tapering_function=tapering_function)
+    bp_wh_y = bandpass(x=x, y=whitened_y)
+
+    if plot_wh_and_bp:
+        fig, axs = plt.subplots(1, 2, sharex=True)
+        axs[0].plot(x, whitened_y)
+        axs[1].plot(x, bp_wh_y)
+        axs[1].set_xlabel("Time [s]")
+        axs[0].set_ylabel("Whitened data")
+        axs[1].set_ylabel("BP and whitened data")
+
+        if cut_x is not None:
+            axs[0].vlines(cut_x, np.min(whitened_y), np.max(whitened_y), linestyles='dashed', label="End of actual data", color='r')
+            axs[1].vlines(cut_x, 0, max(bp_wh_y), linestyles='dashed', label="End of actual data", color='r')
+
+            axs[0].legend()
+            axs[1].legend()
+
+        if notes != "":
+            fig.suptitle(notes, fontsize=16)
+        plt.tight_layout()
+        plt.show()
+
+    if plot_stress_of_wh_data:
+        whitened_y_field = ift.Field(dt_(real_space), val=whitened_y)
+        S_mat, t_dual, f = Stress(whitened_y_field)
+        visualize_stress(S_mat, rows=f, cols=t_dual+np.min(x), vlines=cut_x, tl=" : Whitened data from pow spec fit")
+
+
+import numpy as np
+from scipy.ndimage import percentile_filter
+from scipy.signal import savgol_filter
+
+def extract_envelope(k, y, win=101, perc=90, sg_window=101, sg_poly=2):
+    """
+    k : array of x-values (e.g. k_domain_lengths)
+    y : array of y-values (e.g. amp_xi_spec.val)
+    win : sliding window size in samples (must be odd)
+    perc : percentile for envelope (e.g. 90 for upper envelope)
+    sg_window : window size for Savitzky-Golay smoothing
+    sg_poly : polynomial order for Savitzky-Golay
+    """
+    # Mask zeros
+    y = np.asarray(y, dtype=float)
+    mask = (y == 0) | np.isnan(y)
+    y_masked = y.copy()
+    y_masked[mask] = np.nan
+
+    # Work in log-space (avoid log(0))
+    eps = 1e-300
+    y_masked = np.where(np.isnan(y_masked), np.nan, np.maximum(y_masked, eps))
+    ylog = np.log(y_masked)
+
+    # Replace NaNs by sentinel for percentile_filter
+    sentinel = np.nanmin(ylog[np.isfinite(ylog)]) - 1.0
+    ylog_for_filter = ylog.copy()
+    ylog_for_filter[~np.isfinite(ylog_for_filter)] = sentinel
+
+    # Sliding-window percentile
+    env_raw = percentile_filter(ylog_for_filter, perc, size=win, mode='reflect')
+
+    # Clean sentinel back to NaN
+    env_raw[env_raw <= sentinel + 1e-6] = np.nan
+
+    # Fill NaNs by interpolation
+    n = len(env_raw)
+    inds = np.arange(n)
+    good = np.isfinite(env_raw)
+    env_interp = np.interp(inds, inds[good], env_raw[good])
+
+    # Smooth
+    if sg_window % 2 == 0:
+        sg_window += 1
+    env_smooth = savgol_filter(env_interp, sg_window, sg_poly, mode='mirror')
+
+    return np.exp(env_smooth)  # back to linear scale
+
+
+def generative_asd_template_model(k_values, asd_template_values, extended_real_space_domain:ift.RGSpace,
+                                  additional_operator_to_add=None, amp=(1, 1), zm=1e-10):
+    """
+
+    Takes an asd template over some k_values, linearly interpolates on k_values_fine corresponding to an
+    extended real space domain and returns the corresponding amplitude spectrum operator.
+
+    The idea here is to use this with the 'op_to_apply_to_amp' argument of the inference class object with
+    mode set to 'multiply' and a llslope of (0,1e-16), and possibly fluct = (const., 1e-16) since then the
+    normalizations and harmonic transforms will be taken care of by the simple correlated field, no modulation happens
+    by the color of the correlated field (constant power over all k) and an amplitude variable for the template can
+    take over the role of the original "fluctuations".
+
+    :param amp:
+    :param k_values:
+    :param asd_template_values:
+    :param extended_real_space_domain:
+    :param additional_operator_to_add:    E.g. a Gaussian Comb Template.
+    :return:
+    """
+
+    h_dom = extended_real_space_domain.get_default_codomain()
+    p_space = ift.PowerSpace(harmonic_partner=h_dom)
+    k_values_fine = p_space.k_lengths
+
+    zm_inserter_vals = np.ones(len(k_values))
+    zm_inserter_vals[0] = zm
+    zm_inserter = ift.DiagonalOperator(ift.makeField(domain=p_space, arr=zm_inserter_vals))
+
+    expander = ift.ContractionOperator(p_space, spaces=0).adjoint
+    integrator = expander.adjoint
+
+    template_amplitude = ift.LognormalTransform(mean=amp[0], sigma=amp[1], key=f"template_amplitude", N_copies=0)
+    domain_adapter = ift.NormalTransform(mean=1, sigma=1e-32, key=f"domain_adapter", N_copies=0)
+
+    template_amplitude, domain_adapter = (expander @ template_amplitude, expander @ domain_adapter)
+
+    asd_callable = interp1d(k_values, asd_template_values, kind="linear", bounds_error=False, assume_sorted=False,
+                            fill_value="extrapolate")
+    fine_asd = asd_callable(k_values_fine)
+    asd_on_extended_domain = fieldify(fine_asd, p_space)
+
+    asd_template_op = ift.DiagonalOperator(asd_on_extended_domain)
+    asd_template_op = asd_template_op @ domain_adapter
+
+    asd_template_op = _Normalization(p_space, 0) @ asd_template_op
+    if additional_operator_to_add:
+        add_op_norm = _Normalization(p_space, 0) @ additional_operator_to_add
+        asd_template_op = asd_template_op + add_op_norm
+
+    asd_template_op = zm_inserter(asd_template_op * template_amplitude)
+    return asd_template_op
+
+
+class _SpecialSum(ift.EndomorphicOperator):
+    def __init__(self, domain, space=0):
+        self._domain = ift.makeDomain(domain)
+        self._capability = self.TIMES | self.ADJOINT_TIMES
+        self._contractor = ift.ContractionOperator(domain, space)
+
+    def apply(self, x, mode):
+        self._check_input(x, mode)
+        return self._contractor.adjoint(self._contractor(x))
+
+
+class _Normalization(ift.Operator):
+    """Exponentiate the logarithmic power spectrum, normalize by the sum over
+    all modes and return the square root of the "normalized" power spectrum.
+
+    Notes
+    -----
+    The operator does not perform a proper normalization as it does not account
+    for changes in position space volume. This leads to an additional factor of
+    `1 / \\sqrt{totvol}` being introduced into the result with `totvol`
+    referring to the total volume in position space. The exact value of the
+    additional factor stems from the fact that the volume in harmonic space is
+    solely dependent on the distances in position space. Thus, if the position
+    spaces is enlarged without changing its distances, the volume in harmonic
+    space is kept constant. Doubling the number of pixels though also doubles
+    the number of harmonic modes with each then occupy a smaller volume. This
+    linear decrease in per pixel volume in harmonic space is not captured by
+    just summing up the modes.
+    """
+    def __init__(self, domain, space=0):
+        self._domain = self._target = ift.DomainTuple.make(domain)
+        assert(isinstance(self._domain[space], ift.PowerSpace))
+        hspace = list(self._domain)
+        hspace[space] = hspace[space].harmonic_partner
+        hspace = ift.makeDomain(hspace)
+        pd = ift.PowerDistributor(hspace,
+                              power_space=self._domain[space],
+                              space=space)
+        mode_multiplicity = pd.adjoint(ift.full(pd.target, 1.)).val_rw()
+        zero_mode = (slice(None),)*self._domain.axes[space][0] + (0,)
+        mode_multiplicity[zero_mode] = 0
+        multipl = ift.makeOp(ift.makeField(self._domain, mode_multiplicity))
+        self._specsum = _SpecialSum(self._domain, space) @ multipl
+
+    def apply(self, x):
+        self._check_input(x)
+        spec = x
+        # NOTE, see the note in the doc-string on why this is not a proper
+        # normalization!
+        # NOTE, this "normalizes" also the zero-mode which is supposed to be
+        # left untouched by this operator. Since the multiplicity of the
+        # zero-mode is set to 0, the norm does not contain traces of it.
+        # However, it wrongly sets the zeroth entry of the result. Luckily,
+        # in subsequent calls, the zeroth entry is not used in the CF model.
+        return self._specsum(spec).reciprocal()*spec

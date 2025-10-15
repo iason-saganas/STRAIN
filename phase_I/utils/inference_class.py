@@ -2,6 +2,16 @@ from initial_ideas.utils.minimization_control import *
 import numpy as np
 import matplotlib.pyplot as plt
 import nifty8 as ift
+import pickle
+
+def unpickle_me_this(filename: str, absolute_path=False):
+    if absolute_path:
+        file = open(filename, 'rb')
+    else:
+        file = open(filename, 'rb')
+    data = pickle.load(file)
+    file.close()
+    return data
 
 def plot_histogram(mean, sigma, n_samples, mode="Lognormal"):
     if mode == "Normal":
@@ -539,9 +549,11 @@ class NoiseOperatorFromPowerSpectrum(ift.EndomorphicOperator):
 
 class ExecuteEasyRGSpaceKL:
     def __init__(self, discrete_time, d, cfm_model_name, n_pix_fac=2, x_fac=2, response="linear mask",
-                 sampling_rate_hz=4096, kl_minimizations=10, fluct=(1,1), llslope=(-4,1), flex=None,
+                 sampling_rate_hz=4096, kl_minimizations=10, fluct=(1,1), llslope=(-4,1), flex=None, asper=None,
                  gaussian_noise_level=1e-16, out_dir_name="out_index_my_playground", custom_noise_operator=None,
-                 custom_data_space=None, custom_generative_model=None, op_to_apply_to_amp=None):
+                 custom_data_space=None, custom_generative_model=None, op_to_apply_to_amp=None,
+                 kl_sampler=kl_sampling_rate, mgvi_controler=ic_sampling_lin, geo_vi_minimizer=geoVI_sampling_minimizer,
+                 kl_minimizer=descent_finder):
         """
 
         A rewrite of ExecuteRGSpaceKL using the SimpleCorrelatedField instead of the multidimensional maker.
@@ -576,9 +588,10 @@ class ExecuteEasyRGSpaceKL:
             Assumed level of additive Gaussian noise. Default is 1e-16.
         out_dir_name : str, optional
             Where to store the output files. Default is "out_index_my_playground".
-        op_to_apply_to_amp: ift.OpChain, optional
+        op_to_apply_to_amp: tuple(ift.OpChain, mode:str), optional
             An operator that is applied to the amplitude power spectrum. For information on in what way,
             see modified SimpleCorrelatedField code. Default is None.
+            Mode is either "multiply" or "add".
         """
 
         x0, xf = (np.min(discrete_time), np.max(discrete_time))
@@ -593,7 +606,8 @@ class ExecuteEasyRGSpaceKL:
         length_of_domain = xf - x0
 
         self.out_dir_name = out_dir_name
-        self.distances =  length_of_domain / n_pix
+        self.distances =  length_of_domain / (n_pix-1)  # there is always one less interval than they are support points
+        self.data_distances = length_of_domain / (n_dtps-1)
         self.x_fac = x_fac
 
         self.domain = ift.RGSpace(shape=(n_pix,), distances=self.distances)
@@ -601,7 +615,7 @@ class ExecuteEasyRGSpaceKL:
 
         use_rg = True
         if use_rg:
-            custom_data_space = ift.RGSpace(shape=(n_dtps,), distances=length_of_domain/n_dtps)
+            custom_data_space = ift.RGSpace(shape=(n_dtps,), distances=self.data_distances)
             self.data_space = custom_data_space
         else:
             self.data_space = ift.UnstructuredDomain(shape=(n_dtps, ))
@@ -615,8 +629,6 @@ class ExecuteEasyRGSpaceKL:
         mask_op = Mask(domain=ift.DomainTuple.make((self.domain,)), target=custom_data_space,
                        sampling_rate_hz=sampling_rate_hz, physical_start=x0, physical_end=xf,)
 
-        self.R_physical = mask_op
-
         self.op_to_apply_to_amp = op_to_apply_to_amp
         self.posterior_samples = None
         self.kl_minimizations = kl_minimizations
@@ -627,34 +639,44 @@ class ExecuteEasyRGSpaceKL:
         self.prior_parameters = None
         self.n_dtps = n_dtps
         self.n_pix = n_pix
+        self.L = length_of_domain
 
         self.domain_values = ift.Field(ift.DomainTuple.make(self.domain), np.linspace(x0, xf, n_pix))
         self.domain_values_ext = ift.Field(ift.DomainTuple.make(self.domain_ext), np.linspace(x0, (xf-x0)*x_fac+x0, n_pix*x_fac))
         self.discrete_domain_values = discrete_time
 
+        self.kl_sampler = kl_sampler
+
         if custom_generative_model is None:
-            self.model = self._create_model(fluct, llslope, flex, cfm_model_name)
+            self.model = self._create_model(fluct, llslope, flex, asper, cfm_model_name)
         else:
             self.model = custom_generative_model(self.domain_ext, self.domain_values_ext.val)
             self._cf = None
 
-        self._R_full = self.R_physical @ self.X.adjoint @ self.model
+        self.R_physical = mask_op
+        self.R_xi = self.R_physical @ self.X.adjoint
+        self._R_full = self.R_xi @ self.model
 
         if custom_noise_operator is None:
             self._N = ift.ScalingOperator(self.data_field.domain, gaussian_noise_level, sampling_dtype=np.float64)
         else:
             self._N = custom_noise_operator
 
+        self.mgvi_controler = mgvi_controler
+        self.geo_vi_minimizer = geo_vi_minimizer
+        self.kl_minimizer = kl_minimizer
 
 
-    def _create_model(self, fluctuations, llslope, flex, cfm_model_name):
+
+    def _create_model(self, fluctuations, llslope, flex, asper, cfm_model_name):
 
         insert_flex = None if not flex else (flex[0], flex[1])
+        insert_asper = None if not asper else (asper[0], asper[1])
         args = {"offset_mean":0,
             "offset_std":(2, 1e-16),
             "fluctuations":(fluctuations[0], fluctuations[1]),
             "flexibility": insert_flex,
-            "asperity": None,
+            "asperity": insert_asper,
             "loglogavgslope":(llslope[0], llslope[1]),
         }
 
@@ -677,17 +699,18 @@ class ExecuteEasyRGSpaceKL:
         N = self._N
         R = self._R_full
         likelihood_energy = ift.GaussianEnergy(self.data_field, N.inverse) @ R
+
         return likelihood_energy
 
-    def _execute_kl(self, lh_energy, kl_minimizations = 10):
+    def _execute_kl(self, lh_energy, kl_minimizations = 10,):
 
         posterior_samples = ift.optimize_kl(
             likelihood_energy=lh_energy,
             total_iterations=kl_minimizations,
-            n_samples=kl_sampling_rate,
-            kl_minimizer=descent_finder,
-            sampling_iteration_controller=ic_sampling_lin,
-            nonlinear_sampling_minimizer=geoVI_sampling_minimizer,
+            n_samples=self.kl_sampler,
+            kl_minimizer=self.kl_minimizer,
+            sampling_iteration_controller=self.mgvi_controler,
+            nonlinear_sampling_minimizer=self.geo_vi_minimizer,
             output_directory=self.out_dir_name,
             return_final_position=False,
             resume=True)
@@ -731,7 +754,7 @@ class ExecuteEasyRGSpaceKL:
         plt.title("Reconstruction")
         plt.show()
 
-    def plot_prior_samples(self, num=5, plot_in_data_space=False, apply_adjoint_zp = True, supress_plot = False):
+    def plot_prior_samples(self, num=5, plot_in_data_space=False, apply_adjoint_zp = True, supress_plot = False, ls="-"):
         plt.ylabel("strain $[10^{-19}]$")
         if not plot_in_data_space:
             op = self.model
@@ -741,7 +764,7 @@ class ExecuteEasyRGSpaceKL:
                 if supress_plot:
                     return y
                 plt.xlabel("time in seconds")
-                [plt.plot(self.domain_values.val, sl.val) for sl in y]
+                [plt.plot(self.domain_values.val, sl.val, ls) for sl in y]
                 plt.show()
                 return y
             else:
@@ -761,12 +784,12 @@ class ExecuteEasyRGSpaceKL:
                 plt.show()
             return samples
 
-    def plot_power_spectrum_prior_samples(self, num=1):
+    def plot_amplitude_spectrum_prior_samples(self, num=1, ls=".",  plot_welch_average=False, show=True, exists_figure=False):
         mdl = self.model
         try:
-            ps = mdl.amplitude**2  # we want POWER spectrum samples
+            amp = mdl.amplitude
         except AttributeError:
-            ps = self.model.ps
+            amp = np.sqrt(self.model.ps)
 
         dom_r = self.domain_ext
         dom_h = dom_r.get_default_codomain()
@@ -774,17 +797,37 @@ class ExecuteEasyRGSpaceKL:
 
         samples = []
         for _ in range(num):
-            rnd = ift.from_random(ps.domain)
-            sl = ps(rnd)
+            rnd = ift.from_random(amp.domain)
+            sl = amp(rnd)
             samples.append(sl.val)
 
-        for sample in samples:
-            plt.plot(unique_k, sample, ".")
+        if not exists_figure:
+            _ = plt.figure(figsize=(10,6))
 
-        plt.xlabel(r"Unique $|k|$")
-        plt.ylabel("Prior $P_s(|k|)$")
-        plt.loglog()
-        plt.show()
+
+        if plot_welch_average:
+            _, k_lengths, power_spectrum = unpickle_me_this(
+                "/Users/iason/PycharmProjects/STRAIN/data/data_pickle_or_hdf5/results_from_welch_averaging_data.pickle",
+                absolute_path=True)
+            k_lengths = k_lengths[1:]  # remove 0-mode for simplicity
+            amp_spectrum_welch = np.sqrt(power_spectrum.val[1:])
+
+            plt.plot(k_lengths, amp_spectrum_welch, label="Empirical estimate")
+
+        for sample in samples:
+            plt.plot(unique_k, sample, ls)
+
+        if show:
+
+            plt.xlabel(r"Unique $|k|$")
+            plt.ylabel("Prior $P_A(|k|)$")
+            plt.legend()
+            plt.loglog()
+            plt.show()
+
+        else:
+            plt.close()
+            return unique_k, samples
 
     def plot_data_realizations(self, num=3):
         for _ in range(num):
@@ -794,51 +837,54 @@ class ExecuteEasyRGSpaceKL:
     def plot_prior_fluctuations_distribution(self):
         plot_histogram(mean=self.fluct[0], sigma=self.fluct[1], n_samples=1000, mode="Lognormal")
 
-    def plot_posterior_pow_spec(self, show=True):
+    def plot_posterior_amp_spec(self, show=True, plot_welch_average=False):
         try:
+            # simple correlated field
             a = self.model.amplitude
         except AttributeError:
             # assume double broken power law model
             a = np.sqrt(self.model.ps)
         harmonic_samples = list(self.posterior_samples.local_iterator())
-        # print("here: ",harmonic_samples[0].domain, harmonic_samples[0].val)
         spectrum_realizations = [a.force(sl) for sl in harmonic_samples]
-        # print("here: ", spectrum_realizations[0].val)
-        # print("here: ", spectrum_realizations[0].val[:3])
-        # print("here: ", spectrum_realizations[0].val[-3:])
-
 
         arrs = [sp.val for sp in spectrum_realizations]
-        mean_pow_spec = np.mean(arrs, axis=0)
+        mean_amp_spec = np.mean(arrs, axis=0)
 
         all_k_domains = [spec.domain[0].k_lengths for spec in spectrum_realizations]
         k_domain_lengths = all_k_domains[0]
-        # print("Are all k-domains the same?", np.all(all_k_domains == all_k_domains[0]))
 
         for spec in spectrum_realizations:
             plt.plot(k_domain_lengths, spec.val, color="black", alpha=0.3)
 
-        plt.plot(k_domain_lengths, mean_pow_spec, label=r"Posterior mean amplitude spec $P_a(\mid k \mid)$", lw=5)
+        plt.plot(k_domain_lengths, mean_amp_spec, label=r"Posterior mean amplitude spec", lw=5)
+
+        if plot_welch_average:
+            _, k_lengths, power_spectrum = unpickle_me_this(
+                "/Users/iason/PycharmProjects/STRAIN/data/data_pickle_or_hdf5/results_from_welch_averaging_data.pickle",
+                absolute_path=True)
+            k_lengths = k_lengths[1:]  # remove 0-mode for simplicity
+            amp_spectrum_welch = np.sqrt(power_spectrum.val[1:])
+
+            plt.plot(k_lengths, amp_spectrum_welch, label="Empirical estimate")
+
         plt.loglog()
-
         plt.xlabel(r"Frequency $\omega$")
-        plt.ylabel(r"$P_n(\omega)$")
-
+        plt.ylabel(r"$P_a(\omega)  $")
         plt.legend()
-        # plt.ylim(1e-7,10)
+
         if show:
             plt.show()
         else:
             plt.close()
 
         pspace = spectrum_realizations[0].domain
-        mean_pow_spec_field = ift.Field(pspace, val=mean_pow_spec)
-        return k_domain_lengths, mean_pow_spec_field
+        mean_amp_spec_field = ift.Field(pspace, val=mean_amp_spec)
+        return k_domain_lengths, mean_amp_spec_field
 
     def get_posterior_parameters(self):
         latent_posterior_samples = list(self.posterior_samples.local_iterator())
 
-        modes = {"loglogavgslope": "normal", "fluctuations": "lognormal"}
+        modes = {"loglogavgslope": "normal", "fluctuations": "lognormal", "flexibility": "lognormal"}
 
         dictionary = {}
         prior_choices = self.prior_parameters
@@ -874,3 +920,21 @@ class ExecuteEasyRGSpaceKL:
         print("------------------------\n\n")
 
         return posterior_values
+
+
+    def compute_penrose_solution(self):
+        HT = ift.FFTOperator(domain=self.domain_ext)
+        xi = ift.from_random(HT.target)
+        xi_op = ift.DiagonalOperator(xi)
+
+        R = self.R_xi @ HT.inverse @ xi_op
+
+        penrose_R = R.adjoint @ (R @ R.adjoint).inverse
+
+        tset = self.X.adjoint.inverse
+
+        p_A_star = ((R @ R.adjoint).inverse)(self.data_field)
+        print(p_A_star)
+
+
+

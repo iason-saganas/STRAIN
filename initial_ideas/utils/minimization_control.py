@@ -17,7 +17,7 @@ ic_newton = ift.AbsDeltaEnergyController(name='Newton Descent Finder', deltaE=0.
 
 from nifty8.minimization.line_search import LineSearch
 
-line_searcher =LineSearch(preferred_initial_step_size=1., max_zoom_iterations=200)
+line_searcher = LineSearch(preferred_initial_step_size=1., max_zoom_iterations=200)
 descent_finder = ift.L_BFGS(ic_newton)
 
 def kl_sampling_rate(index: int):
