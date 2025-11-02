@@ -12,6 +12,8 @@ phase_I/out2/
 nifty/
 .coverage/
 phase_II/outs/
+phase_II/nifty_re_playground/re_pipe_1
+phase_II/nifty_re_playground/re_pipe_2
 
 # Ignore OS files
 .DS_Store

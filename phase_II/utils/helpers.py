@@ -534,21 +534,23 @@ def visualize_stress(stress_matrix, rows, cols, tl="", hlines=None, vlines=None)
     cols_are_increasing = np.all(np.diff(cols) > 0)  # strictly increasing
     rows_are_increasing = np.all(np.diff(rows) > 0)  # strictly increasing
     if not cols_are_increasing:
-        raise ValueError("Columns must be increasing")
+        raise ValueError("Column values must be increasing")
     if not rows_are_increasing:
         stress_matrix = np.fft.fftshift(stress_matrix, axes=0)  # shift DC frequency to middle
-        print("\t\tRows must be increasing, assuming a priori standard DFT order and moving DC to the middle")
+        print("\t\tRows must be in ascending order for visualization purposes but they are not, assuming a priori "
+              "standard DFT order and moving DC to the middle")
 
     plt.figure(figsize=(8,6))
+
     plt.imshow(stress_matrix, origin='lower', aspect='auto',
                extent=[np.min(cols), np.max(cols), np.min(rows), np.max(rows)],
-               cmap='viridis', interpolation='nearest')
+               cmap='viridis', interpolation='nearest', )
 
     if hlines is not None:
         plt.hlines(hlines, 0, np.max(cols), color="r", ls="-")
     if vlines is not None:
         plt.vlines(vlines, 0, np.max(rows), color="r", ls="-")
-    plt.colorbar(label='Stress')
+    plt.colorbar(label='Stress', )
     plt.xlabel('Time [s]')
     plt.ylabel('Frequency [s]')
     plt.title('Time vs Frequency' + tl)

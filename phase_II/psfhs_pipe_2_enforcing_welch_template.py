@@ -174,10 +174,10 @@ if plot_wigner:
         xi_real_cut_and_masked = masker(cutter.adjoint(real_xi))
 
         wigner_result  = Stress(xi_real_cut_and_masked)
-        # pickle_me_this("wigner_result_pipe_2", wigner_result)
 
 
     wigner_mat, t_dual, freqs = wigner_result
+    pickle_me_this("wigner_result_pipe_2", wigner_result)
 
     print("\tMean and std of wigner: ", np.mean(wigner_mat.real), np.std(wigner_mat.real))
 
