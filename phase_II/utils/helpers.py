@@ -404,7 +404,7 @@ def mad_outlier_positions(x, y, threshold=2.0, use_magnitude=False, one_sided=Fa
     return x_hits, z_hits
 
 
-from scipy.ndimage import median_filter
+from scipy.ndimage import median_filter, gaussian_filter
 
 
 def remove_baseline(signal, window=101, method='median'):
@@ -491,26 +491,35 @@ def Stress(xi_field: ift.Field, supress_print=False):
     k_freq_cast = k[None, :]
     xi_values_cast_as_rows = xi_time[:, None]
 
-    print("\nCalculating stress...")
+    if not supress_print: print("\nBeginning stress calculation...")
 
-    print("\t Calculating zeta plus")
+    if not supress_print: print("\t Calculating zeta plus")
+
     zeta_plus = fieldify(np.exp(-np.pi*k_freq_cast*1j*time_cast) * xi_values_cast_as_rows, dom=(time_space,h_space))
-    print("\t Calculating zeta minus")
+
+    if not supress_print: print("\t Calculating zeta minus")
+
     zeta_minus = fieldify(np.exp(np.pi*k_freq_cast*1j*time_cast) * xi_values_cast_as_rows, dom=(time_space,h_space))
 
-    print("\t Calculating zeta plus in Fourier space")
+    if not supress_print:  print("\t Calculating zeta plus in Fourier space")
+
     tilde_zeta_plus = FFT_1(zeta_plus).val
-    print("\t Calculating zeta minus in Fourier space")
+
+    if not supress_print:  print("\t Calculating zeta minus in Fourier space")
+
     tilde_zeta_minus = FFT_1(zeta_minus).val
 
-    print("\t Calculating Phi matrix")
+    if not supress_print: print("\t Calculating Phi matrix")
+
     Phi_val = tilde_zeta_plus * tilde_zeta_minus.conj()  # im putting the conjugate on the MINUS zeta since I also changed FFT convention by a sign wrt. Wikipedia...
     Phi_field = ift.Field(dt_((h_space, h_space)), val=Phi_val)
 
-    print("\t Fourier-Transforming columns of Phi matrix")
+    if not supress_print: print("\t Fourier-Transforming columns of Phi matrix")
+
     S = FFT_2(Phi_field)
     S_mat = S.val
-    print("\t ... Done")
+
+    if not supress_print: print("\t ... Done")
 
     dk = k[1] - k[0]        # safe in FFT ordering (first step is Δk)
     dt_dual = 1.0 / (N * dk)
@@ -527,7 +536,7 @@ def Stress(xi_field: ift.Field, supress_print=False):
     return S_mat, t_dual, f
 
 
-def visualize_stress(stress_matrix, rows, cols, tl="", hlines=None, vlines=None):
+def visualize_stress(stress_matrix, rows, cols, smooth=False, tl="", hlines=None, vlines=None):
 
     stress_matrix = stress_matrix.real
 
@@ -540,6 +549,9 @@ def visualize_stress(stress_matrix, rows, cols, tl="", hlines=None, vlines=None)
         print("\t\tRows must be in ascending order for visualization purposes but they are not, assuming a priori "
               "standard DFT order and moving DC to the middle")
 
+    if smooth:
+        stress_matrix = gaussian_filter(stress_matrix, sigma=5.0)   # sigma ~ 0.5..3 blur radius in pixels
+
     plt.figure(figsize=(8,6))
 
     plt.imshow(stress_matrix, origin='lower', aspect='auto',
@@ -551,9 +563,9 @@ def visualize_stress(stress_matrix, rows, cols, tl="", hlines=None, vlines=None)
     if vlines is not None:
         plt.vlines(vlines, 0, np.max(rows), color="r", ls="-")
     plt.colorbar(label='Stress', )
-    plt.xlabel('Time [s]')
-    plt.ylabel('Frequency [s]')
-    plt.title('Time vs Frequency' + tl)
+    plt.xlabel(r'Time [$\mathrm{s}$]')
+    plt.ylabel(r'Frequency [$\mathrm{Hz}$]')
+    plt.title('Wigner function' + tl)
     plt.tight_layout()
     plt.show()
 

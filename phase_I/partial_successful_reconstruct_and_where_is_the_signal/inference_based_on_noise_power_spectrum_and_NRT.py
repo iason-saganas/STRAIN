@@ -1,4 +1,4 @@
-from phase_I.quickview.partial_successful_reconstruct.utils.generative_models import *
+from sub_utils.generative_models import *
 
 inference_scheme = ExecuteRGSpaceKL(
     custom_data_space = N.domain[0],
