@@ -8,17 +8,21 @@ ic_sampling_nl = ift.AbsDeltaEnergyController(name="Coarser, nonlinear sampling"
                                               convergence_level=2)
 # For the non-linear sampling part of geoVI, the iteration controller has to be "promoted" to a minimizer:
 
-# geoVI_sampling_minimizer = ift.NewtonCG(ic_sampling_nl)
-geoVI_sampling_minimizer = ift.L_BFGS(ic_sampling_nl)
+geoVI_sampling_minimizer = ift.NewtonCG(ic_sampling_nl)
+# geoVI_sampling_minimizer = ift.L_BFGS(ic_sampling_nl)
 
 # KL Minimizer control, the same energy criterion as the geoVI iteration control, but more iteration steps
 ic_newton = ift.AbsDeltaEnergyController(name='Newton Descent Finder', deltaE=0.1, convergence_level=2,
                                          iteration_limit=35)
 
-from nifty8.minimization.line_search import LineSearch
+# The partial successful reconstruction works either with NewtonCG or L_BFGS and with different random seeds:
+# Tested same seed with Newton CG and L_BFGS and test a different seed with Newton CG...
 
+from nifty8.minimization.line_search import LineSearch
 line_searcher = LineSearch(preferred_initial_step_size=1., max_zoom_iterations=200)
-descent_finder = ift.L_BFGS(ic_newton)
+
+# descent_finder = ift.L_BFGS(ic_newton)
+descent_finder = ift.NewtonCG(ic_newton)
 
 def kl_sampling_rate(index: int):
     """

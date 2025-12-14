@@ -6,6 +6,28 @@ from matplotlib.patches import Rectangle
 from scipy.interpolate import interp1d
 from scipy.signal.windows import tukey
 from scipy.signal import butter, filtfilt
+import numpy as np
+import datetime
+
+def usual_plot_updated(xl=r"Time $t$ $\mathrm{[sec]}$", yl=r"Strain $h$ $\mathrm{[10^{-19}]}$", title=None, xlim=None, ylim=None,
+               show=True, close=False, save_fig=False):
+    plt.xlabel(xl, fontsize=20)
+    plt.ylabel(yl, fontsize=20)
+    plt.title(title, fontsize=25)
+    ax = plt.gca()
+    labels = ax.get_legend_handles_labels()
+    plt.xlim(xlim)
+    plt.ylim(ylim)
+    if labels != ([], []):
+        plt.legend()
+    if save_fig:
+        plt.tight_layout()
+        current_date = datetime.datetime.now()
+        plt.savefig(f"{current_date}.png")
+    if show:
+        plt.show()
+    if close:
+        plt.close()
 
 def usual_plot(xl=r"Time $t$ $\mathrm{[sec]}$", yl=r"Strain $h$ $\mathrm{[10^{-19}]}$", title=None, xlim=None, ylim=None,
                show=True):
@@ -21,8 +43,6 @@ def usual_plot(xl=r"Time $t$ $\mathrm{[sec]}$", yl=r"Strain $h$ $\mathrm{[10^{-1
             plt.legend()
         plt.tight_layout()
         plt.show()
-
-import numpy as np
 
 def _reshape_to_rows(arr, axis):
     """Move chosen axis to last and flatten leading dims -> shape (M, N)."""
@@ -569,6 +589,72 @@ def visualize_stress(stress_matrix, rows, cols, smooth=False, tl="", hlines=None
     plt.tight_layout()
     plt.show()
 
+
+def detect_outliers_in_stress(stress_matrix, fac, cols, rows):
+    mean_stress, std_stress = np.mean(stress_matrix), np.std(stress_matrix)
+    thresh = mean_stress + fac * std_stress
+
+    larger_than_threshhold_idcs = np.where(stress_matrix > thresh)
+    t, f = cols[larger_than_threshhold_idcs[1]], rows[larger_than_threshhold_idcs[0]]
+
+    return t, f
+
+
+def visualize_stress_updated(stress_matrix, rows, cols, smooth=False, detect_outliers=False, tl="", hlines=None, vlines=None,
+                     smoothing_level=5, cmap="plasma", **kwargs):
+
+    stress_matrix = stress_matrix.real
+
+    cols_are_increasing = np.all(np.diff(cols) > 0)  # strictly increasing
+    rows_are_increasing = np.all(np.diff(rows) > 0)  # strictly increasing
+    if not cols_are_increasing:
+        raise ValueError("Columns must be increasing")
+    if not rows_are_increasing:
+        stress_matrix = np.fft.fftshift(stress_matrix, axes=0)  # shift DC frequency to middle
+        rows = np.fft.fftshift(rows, axes=0)
+        print("\t\tRows must be increasing, assuming a priori standard DFT order and moving DC to the middle")
+        # Must be increasing because we want to plot from - frequency to 0 to + frequency on the y axis
+
+    if smooth:
+        stress_matrix = gaussian_filter(stress_matrix, sigma=smoothing_level)   # sigma ~ 0.5..3 blur radius in pixels
+
+    if detect_outliers:
+
+        t_outlier, f_outlier = detect_outliers_in_stress(stress_matrix, fac=10, cols=cols, rows=rows)
+
+        plt.plot(t_outlier, f_outlier, "b.", markersize=5)
+        plt.show()
+
+        plt.hist2d(t_outlier, f_outlier, bins=[50, 50], cmap='magma')
+        plt.colorbar(label='Counts')
+        plt.xlabel('Time')
+        plt.ylabel('Frequency')
+        plt.title('Outlier density in (t, f)')
+        plt.show()
+
+        bins = np.linspace(t_outlier.min(), t_outlier.max(), 50)
+        bin_indices = np.digitize(t_outlier, bins)
+        mean_f = [f_outlier[bin_indices == i].mean() for i in range(1, len(bins))]
+
+        plt.plot(bins[:-1], mean_f, 'o-')
+        plt.xlabel('Time')
+        plt.ylabel('Mean frequency of outliers')
+        plt.show()
+
+    plt.figure(figsize=(10,6))
+    plt.imshow(stress_matrix, origin='lower', aspect='auto',
+               extent=[np.min(cols), np.max(cols), np.min(rows), np.max(rows)],
+               cmap=cmap, interpolation='nearest')
+
+    if hlines is not None:
+        plt.hlines(hlines, 0, np.max(cols), color="r", ls="-")
+    if vlines is not None:
+        plt.vlines(vlines, 0, np.max(rows), color="r", ls="-")
+
+    plt.colorbar(label='Stress')
+
+    plt.tight_layout()
+    usual_plot_updated(xl='Time [s]', yl='Frequency [Hz]', title='Wigner function'+tl, **kwargs)
 
 def generative_gaussian_comb(x_field: ift.Field, position_of_peaks:np.array, amplitude_of_peaks:np.array, half_width_of_peaks:np.array,
                              rel_sigma_lognormal=.1, rel_sigma_normal=0.5, vary_amplitudes=True, vary_positions=True):

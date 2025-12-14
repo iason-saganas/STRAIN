@@ -20,31 +20,24 @@ M = pipe_1.n_ss
 # plt.show()
 
 
-penrose_xi = find_penrose_moore_solution(pipe=pipe_1)
+penrose_xi = find_penrose_moore_solution(pipe=pipe_1, itr=10_000)
 
-peaks_k, norm_amplitudes_k = get_peaks_from_cache(sigma_thresh=3)
+peaks_k, norm_amplitudes_k = get_peaks_from_cache(sigma_thresh=4, power_spectrum=posterior_pipe_1_ps_mean)
 
 # Plot of penrose_xi and its 2 sigma peaks
-plt.plot(pipe_1.k_signal_full, penrose_xi.real)
-plt.plot(peaks_k, [200]*len(peaks_k), "r.", markersize=5)
-plt.show()
-
-
-# Get Welch average for plot
-_, k_lengths, power_spectrum = unpickle_me_this(
-                    "/Users/iason/PycharmProjects/STRAIN/data/data_pickle_or_hdf5/results_from_welch_averaging_data.pickle",
-                    absolute_path=True)
-k_lengths = k_lengths[1:]  # remove 0-mode for simplicity
-spectrum_welch = power_spectrum.val[1:]
+plt.plot(pipe_1.k_signal_full, penrose_xi.real, color=red)
+# plt.plot(peaks_k, [200]*len(peaks_k), "r.", markersize=5)
+usual_plot(xl="Frequency $f$", yl="Arbitrary units", title=r"$\tilde{\xi}_d^{\ast}$")
 
 # Plot of smooth background together with found peaks
 where_positive = np.where(pipe_1.k_signal_full>0)
-plt.plot(pipe_1.k_signal_full[where_positive], posterior_pipe_1_ps_mean[where_positive], label=r"Smooth background $p_s(k)$")
-plt.plot(peaks_k, norm_amplitudes_k, "b.", markersize=5, label=r"Normalized amplitudes of peaks in penrose $\xi$")
-plt.plot(k_lengths, spectrum_welch, label=r"Empirical estimate of $p(k)$", color="orange")
-plt.legend()
+plt.plot(pipe_1.k_signal_full[where_positive], posterior_pipe_1_ps_mean[where_positive],
+         color=blue, label=r"Smooth background $p_n(f)$")
+plt.plot(peaks_k, norm_amplitudes_k, color=red, marker="v", markersize=5, linewidth=0,
+         label=r"Peaks found in $\tilde{\xi}_d^{\ast}$")
+plot_welch_averaged_ps()
 plt.loglog()
-plt.show()
+usual_plot(xl="Frequency $f$", yl="Power")
 
 # Plot in data space
 ps_mean_std, _, _ = pipe_1.get_posterior_statistics()
@@ -52,9 +45,9 @@ ps_mean = (ps_mean_std[0])[pipe_1.s_h_dom_expander]
 posterior_penrose_data = sample_from_ps(penrose_xi, N=pipe_1.n_ds, inverse_h_trafo=lambda p: jnp.fft.ifft(p, norm="ortho"),
                                         ps=ps_mean)
 
-plt.plot(time, posterior_penrose_data.real , label="Tapered Penrose-Moore")
-plt.plot(time, pipe_1.d, label="Data")
-plt.legend()
-plt.show()
+tmp = np.where((time>15.1) & (time<16.75))
+plt.plot(time[tmp], pipe_1.d[tmp], label=r"$d_{\mathrm{obs}}$", color="orange")
+plt.plot(time[tmp], posterior_penrose_data.real[tmp], color=blue, label=r"Data from smooth $p_n(f)$ and $\tilde{\xi}_d^{\ast}$")
+usual_plot(save_fig=True)
 
 

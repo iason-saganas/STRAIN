@@ -11,9 +11,13 @@ phase_I/out2/
 .git_OLD/
 nifty/
 .coverage/
+phase_I/partial_successful_reconstruct_and_where_is_the_signal/outs
 phase_II/outs/
 phase_II/nifty_re_playground/re_pipe_1
 phase_II/nifty_re_playground/re_pipe_2
+phase_II/nifty_re_playground/bunch_of_white_noise.pickle
+phase_II/nifty_re_playground/bunch_of_white_noise_smoothed.pickle
+phase_II/nifty_re_playground/wigner_results_from_penrose_xi_without_welch_average.pickle
 
 # Ignore OS files
 .DS_Store

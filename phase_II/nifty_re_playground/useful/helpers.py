@@ -13,8 +13,13 @@ from time import time
 from jax import vmap
 from scipy.ndimage import gaussian_filter
 import os
+
 from .calculate_kl import calculate_kl_val_and_grad, get_beneficial_position
 from .calculate_pseudoinverse import find_penrose_moore_solution, sample_from_ps
+import datetime
+from scipy.ndimage import gaussian_filter, median_filter, uniform_filter
+from skimage.restoration import denoise_tv_chambolle
+import cv2
 
 
 def raise_warning(msg):
@@ -39,16 +44,20 @@ def pickle_me_this(filename: str, data_to_pickle: object):
 
 
 def usual_plot(xl=r"Time $t$ $\mathrm{[sec]}$", yl=r"Strain $h$ $\mathrm{[10^{-19}]}$", title=None, xlim=None, ylim=None,
-               show=True, close=False):
-    plt.xlabel(xl)
-    plt.ylabel(yl)
-    plt.title(title)
+               show=True, close=False, save_fig=False):
+    plt.xlabel(xl, fontsize=20)
+    plt.ylabel(yl, fontsize=20)
+    plt.title(title, fontsize=25)
     ax = plt.gca()
     labels = ax.get_legend_handles_labels()
     plt.xlim(xlim)
     plt.ylim(ylim)
     if labels != ([], []):
         plt.legend()
+    if save_fig:
+        plt.tight_layout()
+        current_date = datetime.datetime.now()
+        plt.savefig(f"{current_date}.png")
     if show:
         plt.show()
     if close:
@@ -66,7 +75,7 @@ def get_sample_data(norm=1e19, time_window=(15,17), end_points_small=False, tape
     :return:
     """
     strain = unpickle_me_this(
-        "/Users/iason/PycharmProjects/STRAIN/data/data_pickle_or_hdf5/GW150914_strain.pickle",
+        "/Users/iason/PycharmProjects/STRAIN/phase_I/partial_successful_reconstruct_and_where_is_the_signal/store/GW150914_strain.pickle",
         absolute_path=True)
 
     zero_time = 1126259446  # I got this zero time by looking at the caption of the figure produced by strain.plot().
@@ -165,7 +174,8 @@ class InferenceSchemeRe():
         self.t_ss = jnp.arange(self.n_ss)*self.dist_ss + t[0]
 
         if self.e_fac != 1:
-            self.adjoint_zp = lambda arr, ext_fact: arr[:int(len(arr)/ext_fact+1)]  # TODO: correct cutting?
+            # self.adjoint_zp = lambda arr, ext_fact: arr[:int(len(arr)/ext_fact+1)]  # TODO: correct cutting?
+            self.adjoint_zp = lambda arr, ext_fact: arr[:self.n_ds]
         else:
             self.adjoint_zp = lambda arr, ext_fact: arr  # unit, no extension
 
@@ -194,14 +204,18 @@ class InferenceSchemeRe():
         self.plotting_callback = plotting_callback
         self.amplitude_op = None
         self.s_model = None
-        self.inv_N_cov = None
-        self.sqrt_inv_N_cov = None
+
+        self.inv_N_cov = None  # to build residuals
+        self.sqrt_inv_N_cov = None  # the metric
+        self.sqrt_noise_op = None  # for drawing samples visually, no role in the inference
+
         self.kl_kwargs = None
         self.nonlinearly_update_kwargs = None
         self.draw_linear_kwargs = None
         self.posterior_xi_samples = None
         self.parameter_choices = None
         self.model_prefix = None
+        self.init_pos = None
 
 
     def add_custom_signal_model(self, custom_signal_model: jft.Model):
@@ -227,7 +241,11 @@ class InferenceSchemeRe():
         :return:
         """
 
-        amplitude_op, parameter_choices, model_prefix = custom_signal_model.get_model_components()
+        try:
+            amplitude_op, parameter_choices, model_prefix = custom_signal_model.get_model_components()
+        except AttributeError:
+            raise ValueError("Custom signal model must include method `get_model_components`, containing "
+                             "\namplitude_op, parameter_choices and model_prefix")
 
         self.s_model = custom_signal_model
         self.amplitude_op = amplitude_op
@@ -237,7 +255,7 @@ class InferenceSchemeRe():
 
     def add_cfm_signal_model(self, fluct:tuple, llslope:tuple, flex:tuple | None = None, asper:tuple | None=None,
                              offset_mean:float = 0, offset_std:tuple = (1e-16, 1e-16), model_prefix="s_",
-                             add_power_spectrum_template=None, add_custom_power_op=(None,)):
+                             add_power_spectrum_template=None, add_custom_power_op=(None,), square_iwp=False,):
         """
 
         :param fluct:
@@ -260,7 +278,8 @@ class InferenceSchemeRe():
         cfm_maker.add_fluctuations(shape=(self.n_ss,), distances=self.dist_ss, fluctuations=fluct,
                                    loglogavgslope=llslope, flexibility=flex, asperity=asper, harmonic_type="fourier",
                                    non_parametric_kind="power", hack_add_power_spectrum_template=add_power_spectrum_template,
-                                   hack_custom_amplitude_operators=add_custom_power_op)
+                                   hack_custom_amplitude_operators=add_custom_power_op,
+                                   hack_make_iwp_pos_definite=square_iwp)
 
         parameter_choices = {
             f"{model_prefix}fluctuations": lambda xi: np.exp(fluct[0] + xi*fluct[1]),
@@ -272,7 +291,24 @@ class InferenceSchemeRe():
         }
 
 
-        s_model = cfm_maker.finalize()
+        gaussian_win = False
+        if gaussian_win:
+            s_model_cfm = cfm_maker.finalize()
+            dom = s_model_cfm.domain
+
+            x = self.t_ss
+            std_dev = .1
+            mean = 16.4
+            gaussian = (1 / (std_dev * np.sqrt(2 * np.pi))) * np.exp(-0.5 * ((x - mean) / std_dev) ** 2)
+
+            s_model = lambda p: s_model_cfm(p)*gaussian
+            s_model.domain = dom
+
+            raise_warning("Using fix gaussian window signal model!! Add instead a generative gaussian envelope or similar")
+        else:
+            s_model = cfm_maker.finalize()
+
+
         self.s_model = s_model
         self.amplitude_op = cfm_maker.amplitude
         self.parameter_choices = parameter_choices
@@ -290,7 +326,7 @@ class InferenceSchemeRe():
                 self.sm = signal_model
                 self.zp_adj = zp_adj
                 self.ext_fac = ext_fac
-                super().__init__(init=signal_model.init)
+                super().__init__(domain=signal_model.domain)
 
             def __call__(self, xi):
                 model_values_on_long_domain = self.sm(xi)
@@ -303,24 +339,79 @@ class InferenceSchemeRe():
 
     def add_noise_op(self, noise_var_level=1e-10,
                      inverse_noise_op:Optional[Callable[[jnp.array], jnp.array]]=None,
-                     sqrt_inverse_noise_op:Optional[Callable[[jnp.array], jnp.array]]=None):
+                     sqrt_inverse_noise_op:Optional[Callable[[jnp.array], jnp.array]]=None,
+                     sqrt_noise_op:Optional[Callable[[jnp.array], jnp.array]]=None):
+
+        self.sqrt_noise_op = sqrt_noise_op  # just to draw samples, plays no role in the inference.
 
         if (inverse_noise_op is None) ^ (sqrt_inverse_noise_op is None):  # ^ = xOr operator!
-            raise ValueError("One of inverse_noise_op or sqrt_inverse_noise_op was provided, but the other not,"
+            raise ValueError("One of inverse_noise_op or sqrt_inverse_noise_op was provided, but the other not, "
                              "likely want to provide both, eitherwise wrong metric in Gaussian likelihood.")
 
         if inverse_noise_op is None:
+            print("Using DIAGONAL noise operators.")
             # Both operators were not provided => Diagonal noise covariance
             self.inv_N_cov = lambda x: x/noise_var_level
             self.sqrt_inv_N_cov = lambda x: x/jnp.sqrt(noise_var_level)
         else:
+            print("Using provided inv_N_cov and sqrt_inv_N_cov.")
             # Both operators were correctly provided.
             self.inv_N_cov = inverse_noise_op
             self.sqrt_inv_N_cov = sqrt_inverse_noise_op
 
 
-    def add_minimizers(self, linear_loose=(0.02, 100), linear_strict=(0.02, 100), non_linear_loose=(0.5, 20),
-                       non_linear_strict=(0.5, 20), kl_loose=(0.1, 35), kl_strict=(0.01, 50), use_strict=False):
+    def set_init_pos(self, init_pos:jft.Vector | dict, plot=False, plot_welch_average=True):
+        """
+
+        :param init_pos:    A jft vector or a dictionary containing latent space values to use as initial positions
+                            in the inference. The dictionary does not have to contain all the keys of the likelihood
+                            domain. If a key is missing, a random value is drawn.
+        :param plot:        Whether to plot the resulting initial postion.
+        :param plot_welch_average:  If plot and plot_welch_average, plots welch average. Useful for noise comparison.
+        :return:
+        """
+        if type(init_pos) is jft.Vector:
+            init_pos = init_pos._tree
+
+        lh = self.build_lh(supress_print=True)
+
+        print("You are trying to set an initial positions. Please note that the likelihood domain keys are: \n\t",
+              "<", *lh.domain.keys(),">")
+
+
+        self.key, key_i = jax.random.split(self.key)
+        base_initial_position = lh.init(key_i)
+
+        for key in init_pos.keys():
+            if key in base_initial_position.keys():
+                base_initial_position[key] = init_pos[key]
+
+        self.init_pos = jft.Vector(base_initial_position)
+
+        if plot:
+            ps = lambda xi: self.amplitude_op(xi)**2
+            s_prime = self.signal_response()
+
+            init_ps = ps(self.init_pos)
+            init_s_prime = s_prime(self.init_pos)
+
+            fig, axs = plt.subplots(nrows=2, ncols=1)
+
+            if plot_welch_average:
+                plot_welch_averaged_ps(axs[0])
+            axs[0].loglog(self.k_signal, init_ps)
+            axs[0].set_xlabel("Frequency $f$")
+            axs[0].set_ylabel("Power")
+
+            axs[1].plot(self.t_ds, init_s_prime)
+            axs[1].set_xlabel("Time $t$")
+            axs[1].set_ylabel("Strain")
+
+            plt.tight_layout()
+            plt.show()
+
+    def add_minimizers(self, linear_loose=(0.02, 100), linear_strict=(0.02, 150), non_linear_loose=(0.5, 20),
+                       non_linear_strict=(0.3, 30), kl_loose=(0.1, 35), kl_strict=(0.01, 50), use_strict=False):
 
         if use_strict:
             linear_energy, linear_iter = linear_strict
@@ -332,16 +423,16 @@ class InferenceSchemeRe():
             kl_energy, kl_iter = kl_loose
 
         draw_linear_kwargs = dict(
-            cg_name="linear_sampler",
+            cg_name="CG: linear sampling.",
             cg_kwargs=dict(absdelta=linear_energy, maxiter=linear_iter),
         )
 
         # Arguments for the minimizer in the nonlinear updating of the samples
         nonlinearly_update_kwargs = dict(
             minimize_kwargs=dict(
-                name="non_linear_sampler",
-                xtol=nonlinear_energy,
-                cg_kwargs=dict(name=None),
+                name="Nonlinear sampling NCG",
+                absdelta=nonlinear_energy,
+                cg_kwargs=dict(name="\tCG: nonlinear sampling.",),
                 maxiter=nonlinear_iter,
             )
         )
@@ -349,7 +440,7 @@ class InferenceSchemeRe():
         # Arguments for the minimizer of the KL-divergence cost potential
         kl_kwargs = dict(
             minimize_kwargs=dict(
-                name="kl_minimizer", xtol=kl_energy, cg_kwargs=dict(name=None), maxiter=kl_iter
+                name="KL minim NCG", absdelta=kl_energy, cg_kwargs=dict(name="\tCG: KL minim"), maxiter=kl_iter
             )
         )
 
@@ -358,13 +449,14 @@ class InferenceSchemeRe():
         self.kl_kwargs = kl_kwargs
 
 
-    def build_lh(self):
+    def build_lh(self, supress_print=False):
         s_prime = self.signal_response()
 
         if self.inv_N_cov is None:
             level = 1e-10
-            raise_warning(f"self.add_noise_op() was not called by the user, using Gaussian noise with default "
-                          f"variance level {level}.")
+            if not supress_print:
+                raise_warning(f"self.add_noise_op() was not called by the user, using Gaussian noise with default "
+                              f"variance level {level}.")
             self.add_noise_op(noise_var_level=level)
 
         lh = jft.Gaussian(data=self.d, noise_cov_inv=self.inv_N_cov, noise_std_inv=self.sqrt_inv_N_cov).amend(s_prime)
@@ -372,6 +464,18 @@ class InferenceSchemeRe():
 
     def run_inference(self, kl_iterations=10, n_samples=kl_sampling_rate, use_strict_minimizers=False, out_name="out",
                      resume=True, choose_low_kl_starting_pos=False, geoVi=True):
+        """
+
+        :param kl_iterations:
+        :param n_samples:
+        :param use_strict_minimizers:
+        :param out_name:
+        :param resume:
+        :param choose_low_kl_starting_pos:  If self.init_pos was not set explicitly, tries to find a minimum kl starting
+                                            position.
+        :param geoVi:
+        :return:
+        """
         lh = self.build_lh()
 
         if self.draw_linear_kwargs is None:
@@ -383,15 +487,21 @@ class InferenceSchemeRe():
 
         self.key, key_sampler, key_i = jax.random.split(self.key, 3)
 
-        if choose_low_kl_starting_pos:
-            initial_position = get_beneficial_position(key=key_i, lh=lh, samples_to_draw=2000)
+        if self.init_pos is None:
+            if choose_low_kl_starting_pos:
+                initial_position = get_beneficial_position(key=key_i, lh=lh, samples_to_draw=2000)
+            else:
+                print("\tChoosing random initial position in parameter space...")
+                initial_position = jft.Vector(lh.init(key_i))
         else:
-            initial_position = jft.Vector(lh.init(key_i))
+            print("\tSetting user-defined initial position in parameter space...")
+            initial_position = self.init_pos
 
         if geoVi:
             sample_mode="nonlinear_resample"
         else:
             sample_mode="linear_resample"
+
 
         starting_time = time()
 
@@ -412,6 +522,7 @@ class InferenceSchemeRe():
         )
 
         ending_time = time()
+
 
         duration = ending_time - starting_time
         if duration > 60:
@@ -455,17 +566,24 @@ class InferenceSchemeRe():
         parameter_names = [el for el in parameter_names_1 if el in parameter_names_2]
 
         # posterior_parameters = dict.fromkeys(prior_parameter_choices)
-
-        posterior_parameters_samples = {
-            key: [prior_distributions[key](xi[key]) for xi in post_xi_samples]
-            for key in parameter_names
-        }
+        try:
+            posterior_parameters_samples = {
+                key: [prior_distributions[key](xi[key]) for xi in post_xi_samples]
+                for key in parameter_names
+            }
+        except TypeError:
+            # primals are needed
+            posterior_parameters_samples = {
+                key: [prior_distributions[key]({key: xi[key]}) for xi in post_xi_samples]
+                for key in parameter_names
+            }
 
         posterior_parameters_mean_std = {
             k: (np.mean(v), np.std(v)) for k, v in posterior_parameters_samples.items()
         }
 
         if print_posterior_parameters:
+            print("Posterior statistics:")
             for k, (mean, std) in posterior_parameters_mean_std.items():
                 print(f"{k:20s}  mean = {mean:10.6f},  std = {std:10.6f}")
 
@@ -476,6 +594,18 @@ class InferenceSchemeRe():
         else:
             return_ps, return_signal, return_posterior_parameters = return_list
 
+        # Add parameters that don't need a direct transform, e.g. \xi_s or \xi_spectrum
+        posterior_latent_mean = jft.mean_and_std(post_xi_samples)[0]
+
+        if quantity == "hyperparameters":
+            all_keys = [*posterior_latent_mean]
+            for k in all_keys:
+                if k not in return_posterior_parameters.keys():
+                    # Note: if "spectrum" in k:
+                    # Just the first column is the actual IWP + WP, the second column is its derivative
+                    # needed to create a Markov generative model.
+                    return_posterior_parameters[k] = posterior_latent_mean[k]
+
         if quantity == "power spectrum unique":
             return return_ps
         elif quantity == "power spectrum full":
@@ -485,13 +615,14 @@ class InferenceSchemeRe():
         elif quantity == "hyperparameters":
             return return_posterior_parameters
 
+
         return return_ps, return_signal, return_posterior_parameters
 
     def get_prior_samples(self, mode="signal", num=500):
         """
 
         :param num:     Number of samples to compute mean and std from.
-        :param mode:    Either 'signal' (default) or 'signal response' (lives in data space) or 'amplitude spectrum'.
+        :param mode:    Either 'signal' (default) or 'signal response' (lives in data space) or 'power spectrum'.
         :return:
         """
         if self.s_model is None:
@@ -562,7 +693,7 @@ class InferenceSchemeRe():
 
     def plot_prior_samples(self, mode:Literal["signal", "signal response", "power spectrum",
     "signal & power spectrum"]="signal",
-                           num=5, plot=True, plot_welch_average=False, rolling=False):
+                           num=5, plot=True, plot_welch_average=False, plot_data=True, rolling=False):
         """
 
         :param plot_welch_average:
@@ -576,7 +707,7 @@ class InferenceSchemeRe():
         if mode == "signal & power spectrum":
             print("Not plotting 0-mode for visual purposes")
             for _ in range(num):
-                self._plot_power_spectrum_and_sample()
+                self._plot_power_spectrum_and_sample(plot_welch_average)
             return
 
         samples = self.get_prior_samples(mode=mode, num=num)
@@ -588,6 +719,11 @@ class InferenceSchemeRe():
         yl = "Strain"
         if mode == "signal":
             x = self.t_ss
+
+            samples_for_statistics = self.get_prior_samples(mode="signal", num=500)
+            mean_cross_variance = np.mean(np.var(samples_for_statistics, axis=0))
+            print("Mean std across samples:", np.sqrt(mean_cross_variance))
+
         elif mode == "signal response":
             x = self.t_ds
         elif mode == "power spectrum":
@@ -599,30 +735,39 @@ class InferenceSchemeRe():
             print("Not plotting 0-mode for visual purposes")
             x = x[1:]
             samples = [sl[1:] for sl in samples]
-
         else:
             raise ValueError("Unknown mode '{}'".format(mode))
 
         for sl in samples:
+            np.savetxt("x_131215.txt", x)
+            np.savetxt("y_131215.txt", sl)
             plt.plot(x, sl)
             if rolling:
                 if plot_welch_average:
                     plot_welch_averaged_ps()
                     plt.loglog()
+                if plot_data:
+                    plt.plot(self.t_ds, self.d, label="data", color="orange")
                 usual_plot(xl=xl, yl=yl, title=f"Prior samples: {mode}")
+
 
         if not rolling:
             if plot_welch_average:
                 plot_welch_averaged_ps()
+            if mode == "power spectrum":
                 plt.loglog()
+            if plot_data:
+                plt.plot(self.t_ds, self.d, label="data", color="orange")
             usual_plot(xl=xl, yl=yl, title=f"Prior samples: {mode}", show=True, close=True)
 
 
-    def _plot_power_spectrum_and_sample(self):
+    def _plot_power_spectrum_and_sample(self, plot_welch_average):
         pow_spec_samples = self.get_prior_samples(mode="power spectrum", num=1)
         xi = np.random.standard_normal(self.n_ss)
         expander = self.s_dom_harmonic.power_distributor
-        signal_space_samples = [hartley(ps[expander] * xi, signal_grid=self.s_dom_real) for ps in pow_spec_samples]
+        dk = self.k_signal[1] - self.k_signal[0]
+        h_vol = self.n_ss * dk
+        signal_space_samples = [bw_hartley(h_vol * ps[expander] * xi, norm="ortho") for ps in pow_spec_samples]
 
         x_ps = self.k_signal
         x_s = self.t_ss
@@ -634,7 +779,8 @@ class InferenceSchemeRe():
         pow_spec_samples = [sl[1:] for sl in pow_spec_samples]
 
         fig, axs = plt.subplots(nrows=2, ncols=1)
-        plot_welch_averaged_ps(axs[0])
+        if plot_welch_average:
+            plot_welch_averaged_ps(axs[0])
         for sl in pow_spec_samples:
             axs[0].plot(x_ps, sl)
 
@@ -654,7 +800,8 @@ class InferenceSchemeRe():
         plt.show()
 
 
-    def plot_posterior_signal(self, print_posterior_parameters=False, over_full_signal_space=False):
+    def plot_posterior_signal(self, print_posterior_parameters=False, over_full_signal_space=False, plot_nrt=False, **kwargs):
+        print(": print_posterior_parameters , ", print_posterior_parameters)
         _, signal_mean_std_ss, _ = (
             self.get_posterior_statistics(print_posterior_parameters))
 
@@ -678,27 +825,70 @@ class InferenceSchemeRe():
 
         plt.errorbar(time, signal_mean, yerr=signal_std, label=r"Reconstructed signal (with $1\sigma$ contour)",
                      ecolor=light_blue, color=blue)
-        plt.plot(self.t_ds, self.d-0.5, label="Data", color="orange")
+        plt.plot(self.t_ds, self.d, label="Data", color="orange")
 
-        usual_plot()
+        if plot_nrt:
+            nrt_strain_values = np.loadtxt("/Users/iason/PycharmProjects/STRAIN/data/data_txt/num_rel_template_strain_values.txt") * 1e19
+            nrt_time_values = np.loadtxt("/Users/iason/PycharmProjects/STRAIN/data/data_txt/num_rel_template_time_values.txt")
+            nrt_time_values = nrt_time_values - nrt_time_values[0] + 15
+
+            go_until = np.max(np.where(nrt_time_values<max(self.t_ds)))
+
+            plt.plot(nrt_time_values[:go_until], nrt_strain_values[:go_until], label="Numerical relativity template (matched filter)",
+                     color=red)
+
+        usual_plot(**kwargs)
 
 
 
-    def plot_posterior_power_spectrum(self, print_posterior_parameters=False, plot_welch_average=True):
-        ps_mean_std, _, _ = self.get_posterior_statistics(print_posterior_parameters)
+    def plot_posterior_power_spectrum(self, mode:Literal["median", "mean"], plot_welch_average=True, **kwargs):
+        """
 
-        plt.errorbar(self.k_signal[1:], ps_mean_std[0][1:], yerr=ps_mean_std[1][1:],
-                     label=r"Reconstructed power spectrum (with $1\sigma$ contour)", ecolor=light_blue, color=blue)
+        Note: If we plot only np.std(power spectrum samples) this may be larger than the mean and thus the errorbars
+        are negative and don't look good on the log-log plot.
 
-        print("Zeromode P_s(k=0) excluded in plot")  # because ~0 and then changes the y limits such that the majority
-        # of the power spectrum lies in just the upper half of the coordinate system
+        For a Gaussian distribution, ±1σ containts ~68% of the probability mass. So 16% are lower than -1σ and higher
+        than +1σ. So the first confidence interval starts at the 16th percentile and goes up to 16+68 = 84th percentile.
+
+        So instead of Gaussian errorbars we can plot these percentiles.
+
+        :param mode:                            If "median", plots the mentioned percentiles around the median.
+                                                If "mean", plots just the mean.
+        :param print_posterior_parameters
+        :param plot_welch_average
+        :return:
+        """
+        post_xi_samples = self.posterior_xi_samples
+        ps = lambda x: self.amplitude_op(x) ** 2
+        ps_samples = jnp.array([ps(xi) for xi in post_xi_samples])
+
+        ps_mean = jnp.mean(ps_samples, axis=0)
+
+        percentile_16 = jnp.percentile(ps_samples, 16, axis=0)
+        percentile_84 = jnp.percentile(ps_samples, 84, axis=0)
+        ps_median = jnp.percentile(ps_samples, 50, axis=0)  # percentile_50
+
 
         if plot_welch_average:
             plot_welch_averaged_ps()
 
+        if mode == "mean":
+            plt.plot(self.k_signal[1:], ps_mean[1:], label=r"Posterior mean of power spectrum", color=blue)
+        elif mode == "median":
+            plt.plot(self.k_signal[1:], ps_mean[1:], label=r"Posterior mean of power spectrum", color=blue, ls="--")
+            plt.plot(self.k_signal[1:], ps_median[1:],
+                     label=r"Reconstructed median power spectrum (with $1\sigma$ contour)", color=blue)
+            plt.fill_between(self.k_signal[1:], percentile_16[1:], percentile_84[1:], color=light_blue)
+        else:
+            raise ValueError("Mode must be either 'mean' or 'median'.")
+
+        print("Zeromode P_s(k=0) excluded in plot")  # because ~0 and then changes the y limits such that the majority
+        # of the power spectrum lies in just the upper half of the coordinate system
+
+
         # plt.ylim(-3e-9, 1.4e-7)
         plt.loglog()
-        usual_plot(xl="Frequency $f$", yl="Power")
+        usual_plot(xl="Frequency $f$", yl="Power", **kwargs)
 
 
     def plot_posterior_harmonic_xi_s(self, multiply_with_posterior_amp_spec=False, show=True):
@@ -736,33 +926,35 @@ class InferenceSchemeRe():
             usual_plot(xl="Frequency $f$", yl=r"$\xi_s$")
 
 
-    def plot_noise_sample_with_data(self, num, rolling=False):
-        """
-        Only if noise operator supports a call 'get_sample'.
+    def plot_noise_sample_with_data(self, num, rolling=False, show=True):
+        N_sqrt = self.sqrt_noise_op
+        if N_sqrt is None:
+            raise ValueError("self.sqrt_noise_op must not be None to draw samples from N.")
 
-        """
-        noise_op = self.inv_N_cov
-        try:
-            noise_samples = noise_op.get_samples(num)
-        except AttributeError:
-            raise ValueError("self.inv_N_cov needs to have an implemented method 'get_samples'.")
+        noise_samples = []
+        for _ in range(500):
+            xi = np.random.standard_normal(self.n_ds)
+            sl = N_sqrt(xi)
+            noise_samples.append(sl)
 
-        for sl in noise_samples:
-            plt.plot(self.t_ds, sl)
-            if rolling:
-                plt.plot(self.t_ds, self.d, label="Actual data")
-                usual_plot(close=True)
+        print("Mean cross variance of samples: Var(sl) = ", np.mean(np.var(noise_samples, axis=0)), " (over 500 samples)")
+        if show:
+            for sl in noise_samples[:num]:
+                plt.plot(self.t_ds, sl)
+                if rolling:
+                    plt.plot(self.t_ds, self.d, label="Actual data")
+                    usual_plot(close=True, title="Noise samples from covariance operator")
 
-        if not rolling:
-            plt.plot(self.t_ds, self.d, label="Actual data")
+        if not rolling and show:
+            plt.plot(self.t_ds, self.d, label="Actual data", color="black")
             usual_plot()
 
 
-    def calculate_and_plot_penrose_xi(self, plot=True):
-        penrose_xi = find_penrose_moore_solution(pipe=self, reload_from_cache=True, filename="my_penrose_xi.txt")
+    def calculate_and_plot_penrose_xi(self, itr=10_000, plot=True):
+        penrose_xi = find_penrose_moore_solution(itr, pipe=self, reload_from_cache=True, filename="my_penrose_xi.txt")
         if plot:
 
-            mean_ps = (self.get_posterior_statistics(moment="mean", quantity="power spectrum"))[self.s_h_dom_expander]
+            mean_ps = self.get_posterior_statistics(moment="mean", quantity="power spectrum full")
             iFFT = lambda p: jnp.fft.ifft(p, len(penrose_xi), norm="ortho")
             data_from_penrose_xi = sample_from_ps(xi=penrose_xi, N=len(self.d), ps=mean_ps, inverse_h_trafo=iFFT)
 
@@ -784,20 +976,63 @@ class InferenceSchemeRe():
         return penrose_xi
 
 
-import operator
-from jax.numpy import fft
-def hartley(p, signal_grid):
+def fw_hartley(x, norm="ortho"):
+    r"""
+    If ortho, preserves scaling of input. I.e.
 
-    # :TODO: looks inefficient
+        np.var(fw_hartley(\xi)) = np.var(\xi) if e.g. \xi is iid.
 
-    tmp = fft.fftn(p, axes=None)
-    # c = jft._config.get("hartley_convention")
-    c = "non_canonical_hartley"
-    add_or_sub = operator.add if c == "non_canonical_hartley" else operator.sub
+    :param x:
+    :param norm:
+    :return:
+    """
+    N = len(x)
+    Xf = jnp.fft.fft(x)  # Accumulates √N of intrinsic scaling
+    Hx = Xf.real - Xf.imag  # standard Hartley: cos+sin → real - imag
+    if norm == "ortho":
+        Hx = Hx / jnp.sqrt(N)  #  scales with 1/√N
+    return Hx  # total scale: 1 if ortho, else √N
 
-    harmonic_dvol = 1.0 / signal_grid.total_volume
-    return add_or_sub(tmp.real, tmp.imag) * harmonic_dvol
+def bw_hartley(Hx, norm="ortho"):
+    r"""
+    This is unitary if ortho norm i.e.
 
+            xi = np.random.standard_normal(8193)
+            v = bw_hartley(xi)
+
+            v.T @ v ==  xi.T @ xi
+
+    :param Hx:
+    :param norm:
+    :return:
+    """
+    # Hartley is its own inverse! Note: H(H(x)) = N for not-normalized Hartley H.
+    # Further, Hx = fw_ortho_hartley(x) ~ 1.
+    N = len(Hx)
+    x = fw_hartley(Hx, norm=None)  # ~ √N if input scales with 1 (which it does if it comes from ortho fw hartley)
+    if norm == "ortho":
+        x = x / jnp.sqrt(N) # scales with 1/√N
+    return x  # total scale: 1 if ortho AND input is from ortho fw_hartley.
+    # if instead input is not from non-ortho fw_hartley: ~ √N I think.
+
+
+#
+# xi = np.random.standard_normal(8193)
+# v = bw_hartley_inv(xi)
+# print("v^T v: ", v.T @ v)
+# print("xi^T xi: ", xi.T @ xi)
+
+# uH_xi_list = []
+# for _ in range(10):
+#     xi = np.random.standard_normal(8193)
+#     uH_xi = fw_hartley(xi)
+#     print("uH_xi var: ", np.var(bw_hartley_inv(uH_xi)))
+#     plt.plot(uH_xi)
+# plt.show()
+
+# print(np.var(fw_hartley(np.random.standard_normal(1000))))
+
+# stop
 
 def join_k_arrays(harmonic_grid):
     """
@@ -814,23 +1049,44 @@ def join_k_arrays(harmonic_grid):
     return joint_k
 
 
-def get_welch_averaged_ps(interpolate_to=None):
+def get_welch_averaged_ps(interpolate_over_k_grid=None):
     """
 
-    :param interpolate_to:      If an integer, interpolates the power spectrum so its length matches the given integer.
+    :param interpolate_over_k_grid:   If an array, interpolates the power spectrum over that new k grid.
     :return:
     """
     welch = "/Users/iason/PycharmProjects/STRAIN/data/data_pickle_or_hdf5/results_from_welch_averaging_data.pickle"
     _, k_lengths, power_spectrum = unpickle_me_this(welch, absolute_path=True)
 
-    if interpolate_to is not None:
+    if interpolate_over_k_grid is not None:
         power_spectrum = power_spectrum.val
         interpolator = interp1d(x=k_lengths, y=power_spectrum, kind="linear")
-        new_k = np.linspace(min(k_lengths), max(k_lengths), interpolate_to)
-        new_power_spectrum = interpolator(new_k)
-        return jnp.array(new_k), jnp.array(new_power_spectrum)
+        new_power_spectrum = interpolator(interpolate_over_k_grid)
+        return jnp.array(interpolate_over_k_grid), jnp.array(new_power_spectrum)
 
     return jnp.array(k_lengths), jnp.array(power_spectrum.val)
+
+
+def interpolate_waveform_from_inverted_wigner(new_times):
+    waveform = np.loadtxt("/Users/iason/PycharmProjects/STRAIN/data/data_txt/waveform_from_inverted_wigner.txt")
+    waveform_times = np.loadtxt("/Users/iason/PycharmProjects/STRAIN/data/data_txt/times_from_inverted_wigner.txt")
+
+    time_shift = waveform_times[0] - new_times[0]
+
+    new_grid = np.linspace(waveform_times.min(), waveform_times.max(), len(new_times))
+    interpolator = interp1d(x=waveform_times, y=waveform, kind="linear", fill_value="extrapolate")
+    new_values = interpolator(new_grid)
+
+    dt = new_times[1] - new_times[0]
+    shift = int((0.1+0.136) /dt)  # please don't use this roll
+    new_values = np.roll(new_values, -shift)
+
+    # plt.plot(waveform_times, waveform, label="old")
+    # plt.plot(new_times, new_values, label="new")
+    # usual_plot()
+
+    return new_values
+
 
 def plot_welch_averaged_ps(ax=None):
     k_lengths, power_spectrum = get_welch_averaged_ps()
@@ -948,7 +1204,7 @@ class SignalModelCfmAsPowerSpectrum(jft.Model):
         amplitude_realization = self.amplitude_spectrum_normalized(xi)
         xi_s_realization = self.xi_s(xi)
 
-        return hartley(amplitude_realization[self.power_distributor] * xi_s_realization, self.s_grid) * 1e2
+        return fw_hartley(amplitude_realization[self.power_distributor] * xi_s_realization, self.s_grid) * 1e2
 
     def get_model_components(self):
         amplitude_op = self.amplitude_spectrum_normalized
@@ -1025,33 +1281,40 @@ def Stress_re(xi, time, supress_print=False, downsample=False):
     t = jnp.arange(N) / (N*df)  # dual time, equal to input time - time[0].
 
 
-    print("\nCalculating stress...")
+    if not supress_print:
+        print("\nCalculating stress...")
 
     t_c = t[:, None]  # time cast
     k_c = k[None, :]  # shift frequencies cast
     xi_c = xi[:, None]  # xi values cast as rows
 
-    print("\t Calculating zeta plus")
+    if not supress_print:
+        print("\t Calculating zeta plus")
     zeta_plus = jnp.exp(-jnp.pi * k_c * 1j * t_c) * xi_c # domain = (time_space, h_space)
 
-    print("\t Calculating zeta minus")
+    if not supress_print:
+        print("\t Calculating zeta minus")
     zeta_minus = jnp.exp(jnp.pi * k_c * 1j * t_c) * xi_c # domain = (time_space, h_space)
 
-    print("\t Calculating zeta plus in Fourier space")
+    if not supress_print:
+        print("\t Calculating zeta plus in Fourier space")
     tilde_zeta_plus = FFT(zeta_plus, ax=0)
 
-    print("\t Calculating zeta minus in Fourier space")
+    if not supress_print:
+        print("\t Calculating zeta minus in Fourier space")
     tilde_zeta_minus = FFT(zeta_minus, ax=0)
 
-    print("\t Calculating Phi matrix")
+    if not supress_print:
+        print("\t Calculating Phi matrix")
     Phi = tilde_zeta_plus * tilde_zeta_minus.conj()  # domain = (h_space, h_space)
 
-    print("\t Inverse Fourier-Transforming columns of Phi matrix")
+    if not supress_print:
+        print("\t Inverse Fourier-Transforming columns of Phi matrix")
     S = iFFT(Phi, ax=1)
     S.block_until_ready()
 
-
-    print("\t ... Done")
+    if not supress_print:
+        print("\t ... Done")
     if not supress_print:
         diagnostic = jnp.abs(jnp.mean(S.imag))
         tmp = float(diagnostic)
@@ -1144,8 +1407,48 @@ def Stress(xi_field: ift.Field, supress_print=False):
 
     return S_mat, t_dual, f
 
+_smoothing_modes = Literal[
+    "gaussian",
+    "median",
+    "uniform",
+    "bilateral",
+    "anisotropic"
+]
+def smooth_matrix(
+    mat: np.ndarray,
+    smoothing_lvl,
+    mode: _smoothing_modes = "gaussian"
+) -> np.ndarray:
 
-def visualize_stress(stress_matrix, rows, cols, smooth=False, detect_outliers=True, tl="", hlines=None, vlines=None):
+    if mode == "gaussian":
+        return gaussian_filter(mat, sigma=smoothing_lvl)
+
+    elif mode == "median":
+        size = int(max(1, smoothing_lvl))
+        return median_filter(mat, size=size)
+
+    elif mode == "uniform":
+        size = int(max(1, smoothing_lvl))
+        return uniform_filter(mat, size=size)
+
+    elif mode == "bilateral":
+        # smoothing_lvl used as intensity + spatial scale
+        return cv2.bilateralFilter(
+            mat.astype(np.float32),
+            d=5,
+            sigmaColor=smoothing_lvl * 20,
+            sigmaSpace=smoothing_lvl * 5,
+        )
+
+    elif mode == "anisotropic":
+        # total variation denoising
+        return denoise_tv_chambolle(mat, weight=smoothing_lvl)
+
+    else:
+        raise ValueError(f"Unknown mode: {mode}")
+
+def visualize_stress(stress_matrix, rows, cols, smooth=False, detect_outliers=False, tl="", hlines=None, vlines=None,
+                     smoothing_level=5, cmap="plasma", **kwargs):
 
     stress_matrix = stress_matrix.real
 
@@ -1160,7 +1463,7 @@ def visualize_stress(stress_matrix, rows, cols, smooth=False, detect_outliers=Tr
         # Must be increasing because we want to plot from - frequency to 0 to + frequency on the y axis
 
     if smooth:
-        stress_matrix = gaussian_filter(stress_matrix, sigma=5.0)   # sigma ~ 0.5..3 blur radius in pixels
+        stress_matrix = smooth_matrix(stress_matrix, smoothing_level)
 
     if detect_outliers:
 
@@ -1185,21 +1488,20 @@ def visualize_stress(stress_matrix, rows, cols, smooth=False, detect_outliers=Tr
         plt.ylabel('Mean frequency of outliers')
         plt.show()
 
-    plt.figure(figsize=(8,6))
+    plt.figure(figsize=(10,6))
     plt.imshow(stress_matrix, origin='lower', aspect='auto',
                extent=[np.min(cols), np.max(cols), np.min(rows), np.max(rows)],
-               cmap='viridis', interpolation='nearest')
+               cmap=cmap, interpolation='nearest')
 
     if hlines is not None:
         plt.hlines(hlines, 0, np.max(cols), color="r", ls="-")
     if vlines is not None:
         plt.vlines(vlines, 0, np.max(rows), color="r", ls="-")
+
     plt.colorbar(label='Stress')
-    plt.xlabel('Time [s]')
-    plt.ylabel('Frequency [s]')
-    plt.title('Time vs Frequency' + tl)
     plt.tight_layout()
-    plt.show()
+
+    usual_plot(xl='Time [s]', yl='Frequency [Hz]', title='Wigner function'+tl, **kwargs)
 
 
 def detect_outliers_in_stress(stress_matrix, fac, cols, rows):
@@ -1221,7 +1523,7 @@ def dt_(dom):
 
 class GaussianComb(jft.Model):
     def __init__(self, unique_k_lengths:jnp.array, list_of_peaks:jnp.array, list_of_amplitudes:jnp.array, rel_sigma_amp = .1, rel_sigma_widths=.1,
-                 a_priori_width_of_peaks = 10):
+                 a_priori_width_of_peaks = 10, abs_width_sigma=1, abs_amp_sigma=1):
         """
 
         Generates a sum of Gaussian parametric peaks at fixed positions and with lognormal priors set on the
@@ -1241,8 +1543,15 @@ class GaussianComb(jft.Model):
         self.frequency_widths = a_priori_width_of_peaks * jnp.ones(self.N)
         self.positions = list_of_peaks
 
-        self.sigma_amp = rel_sigma_amp * list_of_amplitudes
-        self.sigma_widths = rel_sigma_widths * self.frequency_widths
+        if not abs_width_sigma:
+            self.sigma_widths = rel_sigma_widths * self.frequency_widths
+        else:
+            self.sigma_widths = abs_width_sigma
+
+        if not abs_amp_sigma:
+            self.sigma_amp = rel_sigma_amp * list_of_amplitudes
+        else:
+            self.sigma_amp = abs_amp_sigma
 
         self.xi_g_amp = jft.LogNormalPrior(mean=list_of_amplitudes, std=self.sigma_amp, name="xi_g_amp",
                                            dtype=jnp.float64, shape=(self.N,))
@@ -1278,6 +1587,8 @@ class GaussianComb(jft.Model):
         position_vector = self.positions
 
         gaussians = vmap(self.sg)(amplitude_vector, width_vector, position_vector)
+        # comb = jnp.sum(gaussians, axis=0)
+        # norm = jnp.trapezoid(comb, x=self.f)
         return jnp.sum(gaussians, axis=0)
 
 
@@ -1297,7 +1608,7 @@ class PowerSpectrumTemplate(jft.Model):
         return scale_realization * self.ps_template
 
 
-def get_peaks_from_cache(only_positives = True, sigma_thresh=2, custom_norm=1, custom_path=None):
+def get_peaks_from_cache(only_positives = True, sigma_thresh=2, custom_norm=1, power_spectrum=None, custom_path=None):
     """
     Loads a saved xi_d file, detects peaks based on an ad-hoc threshhold and returns the position and amplitude of
     said peaks.
@@ -1306,28 +1617,34 @@ def get_peaks_from_cache(only_positives = True, sigma_thresh=2, custom_norm=1, c
     :param custom_norm:         float,       Normalization factor, e.g. max(posterior_pipe_1_ps_mean). By default,
                                              max(amplitude of peak) = 1.
     :param custom_path:                      Path to a saved xi_d file
+    :param power_spectrum:                   If not none, will be used as weights
     :return:
     """
-
     path = "pipe2_xi_cache.txt" if custom_path is None else custom_path
 
     obj = np.loadtxt(path, dtype=np.complex128)
 
     xi, f = obj[:,0].real, obj[:,1].real
+    if power_spectrum is None:
+        power_spectrum = np.ones(len(f))
     if only_positives:
         to_del = np.where(xi<0)
         xi = np.delete(xi, to_del)
         f = np.delete(f, to_del)
+        ps = np.delete(power_spectrum, to_del)
 
     adhoc_treshhold = sigma_thresh * np.mean(xi)
 
     where_peaks_in_xi = np.where(xi > adhoc_treshhold)
     peaks_k = f[where_peaks_in_xi]
 
-    amplitudes_k = xi[where_peaks_in_xi]
-    norm_amplitudes_k = amplitudes_k * custom_norm / max(amplitudes_k)
+    ps_weights = ps[where_peaks_in_xi]
+    ps_weights_normed = ps_weights / max(ps_weights)
 
-    return peaks_k, norm_amplitudes_k
+    amplitudes_k = xi[where_peaks_in_xi]
+    normed_amplitudes_k = amplitudes_k * custom_norm / max(amplitudes_k) * ps_weights_normed
+
+    return peaks_k, normed_amplitudes_k
 
 
 def analyze_kl_callback(out_name, max_kl_iterations, lh, samples, vi_state):
@@ -1358,10 +1675,15 @@ def analyze_kl_callback(out_name, max_kl_iterations, lh, samples, vi_state):
 
 
 class InvNoiseCovFromPs():
-    def __init__(self, noise_ps:jnp.array, data_grid, e_fac, n_dtps:int, custom_norm=1e-2):
+    def __init__(self, one_sided_noise_ps:jnp.array, data_grid, e_fac, n_dtps:int, custom_norm=1):
         r"""
 
-        Takes noise_ps as input and returns an operator which when called applies F^{-1} 1/noise_ps F.
+        Don't delete yet, `downsampling` procedure and checks might be helpful when not using a welch average for
+        the power spectrum.
+
+        Takes one_sided_noise_ps as input and returns an operator which when called applies
+
+            F^{-1} 1/full_noise_ps F.
 
         Here, I want to simply downsample and thus create periodic realizations of the noise. Therefore, the inference
         is going to be off at the edges.
@@ -1405,7 +1727,7 @@ class InvNoiseCovFromPs():
         of this class would be applied to the residual d minus R s; if you draw a fixed sample without a xi_s variable,
         zero-padding does not enforce boundary conditions and the resulting FFT may appear a bit blurred.
 
-        :param noise_ps:    The noise power spectrum.
+        :param one_sided_noise_ps:    The noise power spectrum P_n(|k|).
         :param data_grid:   The real space data grid.
         :param e_fac:       The extension factor by which the data domain was extended to do the inference.
                             Will determine how much the power spectrum is downsampled.
@@ -1413,41 +1735,74 @@ class InvNoiseCovFromPs():
         :param custom_norm  A scalar multiplied onto the power spectrum to bring the data realizations to the order of
                             magnitude of the actual data (something about volume factors I evidently don't understand).
         """
-        self.noise_ps = noise_ps[::e_fac] * custom_norm
-        self.N = len(self.noise_ps)
 
-        assert self.N == n_dtps  # downsampled correctly?
+        self.one_sided_noise_ps = one_sided_noise_ps[::e_fac] * custom_norm
 
-        self.inv_noise_ps = self.noise_ps**(-1)
-        self.H = lambda p: jnp.fft.fft(p, n=self.N, norm="ortho")  # not scaling the forward transform
-        self.iH = lambda p: jnp.fft.ifft(p, n=self.N, norm="ortho")  # not scaling the backward transform
+        self.M_k_lengths = len(data_grid.harmonic_grid.relative_log_mode_lengths)
+        self.M = len(one_sided_noise_ps)
+        self.N = n_dtps
+        self.k = data_grid.harmonic_grid.mode_lengths
+        self.dk = self.k[1]-self.k[0]
 
-        self.harmonic_dvol = 1.0 / data_grid.total_volume
-        self.harmonic_dvol = 1.0  #  don't scale for now, testing something out
+        self.harmonic_data_grid_expander = data_grid.harmonic_grid.power_distributor # [0 1 2 ... 3 2 1], therefore,
+        # if one_sided_noise_ps is ordered as [0, +1, +2, ..., +N/2], one_sided_noise_ps[power_distributor]
+        # will be ordered as [0, +1, +2, ..., +N/2, +N/2-1, +2, +1].
 
+        assert self.M == self.M_k_lengths  #  the noise power spectrum IS one-sided, i.e. supported by the correct
+        # number of fourier modes. If the ps was gotten by an interpolation that didn't get it right, this will
+        # throw an assertion error
 
-        self.time = np.arange(self.N) * data_grid.distances
+        assert self.N == n_dtps  # downsampled correctly? edit 08.12: Forgot why I was doing this
 
-        self.inv = self.inv_noise_ps
-        self.sqrt = jnp.sqrt(self.noise_ps)
+        self.golden_fourier_norm = self.N * self.dk
+        self.full_noise_ps = one_sided_noise_ps[self.harmonic_data_grid_expander]
+
+        self.inv = self.full_noise_ps**(-1)
+        self.sqrt = jnp.sqrt(self.full_noise_ps)
+
+        self.uH = lambda p: fw_hartley(p, norm="ortho")
+        self.iuH = lambda p: bw_hartley(p, norm="ortho")
+
+        expected_var = np.sum(self.full_noise_ps * self.dk)
+        print("Expected real-space variance:", expected_var)
+
+        raise_warning("To do: Write assertions of the power spectrum and sample variances automatically")
+
+        print("hä", np.sum(one_sided_noise_ps[1:])+one_sided_noise_ps[0]/2)
+
+        print("\n\n\n and more diagnostics...\n")
+
+        C = self.uH(np.diag(self.full_noise_ps * self.N * self.dk) @ self.iuH(np.eye(self.N)))
+
+        print("np.mean(np.diag(C)[1:]) (exempting C[0][0] because I think its a special point):", np.mean(np.diag(C)[1:]))
+        print("\n and C itself: ", C)
+
 
 
     def __call__(self, p):
         # Implements: N^{-1}(res) = F^{-1} p_n^{-1} F(res) where res = d-Rs for example
         # this assumes that the input is periodic. :TODO I believe that this will enforce the theoretical data Rs to be inferred as a periodic function
-        fourier_input = self.H(p)
-        applying_inv_ps = self.inv * fourier_input
-        transforming_to_real_space = self.iH(applying_inv_ps)
-        return transforming_to_real_space.real * self.harmonic_dvol
+
+        fourier_input = self.uH(p)  # now, this is an i.i.d. variable in standard DFT order:
+        # [0, +1, +2, ..., +N/2, -N/2+1, ..., -1.]
+
+        applying_inv_ps = 1/self.golden_fourier_norm * self.inv * fourier_input  # meaning, that self.inv must ALSO be in standard DFT order
+        # [0, +1, +2, ..., +N/2, -N/2+1, ..., -1.] which should be guaranteed through the use of
+        # harmonic_data_grid_expander
+
+        transforming_to_real_space = self.iuH(applying_inv_ps)
+        res = transforming_to_real_space
+        return res
 
 
     def N_sqrt(self, p):
         # Implements: xi_prime = N^{1/2} xi where xi is standard normal, such that xi_prime is from a Gaussian with covariance N.
-        # This samples will be periodic.
-        fourier_input = self.H(p)
-        applying_sqrt_ps = self.sqrt * fourier_input
-        transforming_to_real_space = self.iH(applying_sqrt_ps)
-        return transforming_to_real_space.real * self.harmonic_dvol  # :TODO guessing the volume factor here
+        # These samples will be periodic.
+        fourier_input = self.uH(p)
+        applying_sqrt_ps = jnp.sqrt(self.golden_fourier_norm) * self.sqrt * fourier_input
+        transforming_to_real_space = self.iuH(applying_sqrt_ps)
+        res = transforming_to_real_space
+        return res
 
 
     def get_samples(self, num):
@@ -1471,4 +1826,105 @@ class InvNoiseCovFromPs():
         usual_plot()
 
 
+class NoiseCovarianceFromPs():
+    def __init__(self, one_sided_noise_ps:jnp.array, data_grid, callable_to_apply=None, silly_number=1):
+        r"""
+        Please see deprecated class `InvNoiseCovFromPs` as well.
+        The call method of this class implements
 
+            output = uH callable( h_vol * one_sided_noise_ps[expander]m) iuH ( input ),
+
+        where uH and iuH are unitary Hartley and inverse Hartley transforms, respectively.
+
+        :param one_sided_noise_ps:    The noise power spectrum P_n(|k|).
+        :param data_grid:             The real space data grid to get the wavevectors.
+        :param callable_to_apply:     A callable to apply the noise power spectrum and corresponding weights in Fourier
+                                      space. For example, lambda x: x**-1 for an inverse power spectrum.
+        """
+
+        self.one_sided_noise_ps = one_sided_noise_ps
+        self.apply_callable = callable_to_apply
+        self.h_grid = data_grid.harmonic_grid
+        self.k = self.h_grid.mode_lengths
+        self.N = data_grid.shape[0]
+
+        self.M_k_lengths = len(self.h_grid.relative_log_mode_lengths)
+        self.M = len(one_sided_noise_ps)
+        self.dk = self.k[1]-self.k[0]
+
+        self.expand =  self.h_grid.power_distributor # [0 1 2 ... 3 2 1], therefore,
+        # if one_sided_noise_ps is ordered as [0, +1, +2, ..., +N/2], one_sided_noise_ps[power_distributor]
+        # will be ordered as [0, +1, +2, ..., +N/2, +N/2-1, +2, +1].
+
+        assert self.M == self.M_k_lengths  #  the noise power spectrum IS one-sided, i.e. supported by the correct
+        # number of fourier modes. If the ps was gotten by an interpolation that didn't get it right, this will
+        # throw an assertion error
+
+        self.h_vol = self.N * self.dk
+        self.full_noise_ps = one_sided_noise_ps[self.expand]
+
+        self.uH = lambda p: fw_hartley(p, norm="ortho")
+        self.iuH = lambda p: bw_hartley(p, norm="ortho")
+
+        self.silly_number = silly_number
+
+        expected_var = np.sum(self.full_noise_ps * self.dk)
+        print("Initiating noise covariance. σ^2 = ∫ ps(k) dk = ", expected_var,
+              ". Callable to be applied: callable(2)=", self.apply_callable(2))
+
+    def __call__(self, p):
+        fourier_input = self.uH(p)  # An i.i.d. variable in standard DFT order [0, +1, +2, ..., +N/2, -N/2+1, ..., -1.]
+        kernel = self.apply_callable(self.full_noise_ps * self.h_vol)
+        return self.iuH(kernel * fourier_input) * self.silly_number
+
+
+
+
+def power_analyze_re(x_values, y_values):
+    """
+    Returns an estimate of the power spectrum by absolute squaring the fourier transform.
+    :param x_values: The x values used to determine the spacing needed to calculate the fourier modes.
+    :param y_values: A real space periodic array.
+    :return:
+    """
+    N = len(x_values)
+    dx = x_values[1] - x_values[0]
+    ps = jnp.abs(jnp.fft.fft(y_values, n=N, norm="ortho"))**2
+    k = jnp.fft.fftfreq(N, d=dx)
+    return k, ps
+
+
+def plot_histogram(key, mean: float, sigma: float, n_samples: int, mode="Lognormal"):
+    """
+    Plots a histogram visualizing the moment-matched lognormal transform.
+    If `vlines` is provided, vertical lines will be drawn at the specified x-locations.
+    Usage:
+
+    plot_lognormal_histogram(mean=.06, sigma=0.03, n_samples=10000, vlines=[0.023, 0.05], save=True, show=True)
+
+    :param mean:        The mean from which logmean is calculated with logsigma's help.
+    :param sigma:       The sigma from which logsigma is calculated.
+    :param n_samples:   How many samples to plot
+    :return:
+    """
+    # fig = plt.figure(figsize=(10, 4))
+    if mode == "Normal":
+        print("Normal distrubution")
+        op = jft.NormalPrior(mean=mean, std=sigma, name="Normal for Histogram")
+    elif mode == "Lognormal":
+        op = jft.LogNormalPrior(mean=mean, std=sigma, name='Lognormal for Histogram')
+    else:
+        raise ValueError("Unknown mode '{}'".format(mode))
+
+    rnd_states = []
+    for _ in range(n_samples):
+        key, key_i = jax.random.split(key)
+        rnd_states.append(jft.random_like(key=key_i, primals=op.domain))
+
+    op_samples = np.array([op(state) for state in rnd_states])
+
+    label = rf"{mode} with $(\mu, \sigma)=$" + f"$({mean}, {sigma})$" if not (mode=="Uniform") else rf"{mode} in " + r"$\mathrm{[0,1]}$"
+    plt.hist(op_samples, bins=200, label=label,
+             histtype='step', facecolor='white', color="black")
+
+    plt.show()

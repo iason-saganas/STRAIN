@@ -1,0 +1,540 @@
+
+OPTIMIZE_KL: Iteration 0001 ⛰:+2.1072e+04
+OPTIMIZE_KL: #(Nonlinear sampling steps) (1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1)
+OPTIMIZE_KL: #(KL minimization steps) 1
+OPTIMIZE_KL: Likelihood residual(s):
+'reduced χ²:    0.54±    0.22, avg:    +0.16±    0.21, #dof:   8193'
+
+OPTIMIZE_KL: Prior residual(s):
+ps_template_scale       :: 'reduced χ²:     1.4±     1.4, avg:    -0.27±     1.2, #dof:      1'
+s_flexibility           :: 'reduced χ²:     2.7±     1.7, avg:     -1.5±    0.55, #dof:      1'
+s_fluctuations          :: 'reduced χ²:     4.2±    0.86, avg:     -2.0±    0.22, #dof:      1'
+s_loglogavgslope        :: 'reduced χ²:     1.6±     1.5, avg:    -0.51±     1.2, #dof:      1'
+s_spectrum              :: 'reduced χ²:     1.1±   0.011, avg:  -0.0066±  0.0044, #dof:  16382'
+s_xi                    :: 'reduced χ²:     1.1±   0.013, avg:  -0.0051±  0.0053, #dof:  16385'
+s_zeromode              :: 'reduced χ²:    0.48±    0.55, avg:   +0.013±     0.7, #dof:      1'
+xi_g_amp                :: 'reduced χ²:     1.8±    0.14, avg:   +0.043±   0.033, #dof:    270'
+xi_g_width              :: 'reduced χ²:     1.9±   0.055, avg:   -0.012±   0.057, #dof:    270'
+
+
+OPTIMIZE_KL: Iteration 0002 ⛰:+2.0492e+04
+OPTIMIZE_KL: #(Nonlinear sampling steps) (1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1)
+OPTIMIZE_KL: #(KL minimization steps) 1
+OPTIMIZE_KL: Likelihood residual(s):
+'reduced χ²:    0.37±   0.076, avg:    +0.14±    0.13, #dof:   8193'
+
+OPTIMIZE_KL: Prior residual(s):
+ps_template_scale       :: 'reduced χ²:    0.88±     1.1, avg:    -0.21±    0.91, #dof:      1'
+s_flexibility           :: 'reduced χ²:     2.9±     2.0, avg:     -1.6±    0.62, #dof:      1'
+s_fluctuations          :: 'reduced χ²:     4.6±    0.94, avg:     -2.1±    0.22, #dof:      1'
+s_loglogavgslope        :: 'reduced χ²:     1.1±     1.2, avg:    -0.53±    0.89, #dof:      1'
+s_spectrum              :: 'reduced χ²:     1.1±  0.0064, avg:  -0.0065±  0.0086, #dof:  16382'
+s_xi                    :: 'reduced χ²:     1.1±   0.017, avg:   -0.005±  0.0055, #dof:  16385'
+s_zeromode              :: 'reduced χ²:     1.3±     1.1, avg:   +0.013±     1.1, #dof:      1'
+xi_g_amp                :: 'reduced χ²:     1.8±   0.079, avg:   +0.038±   0.031, #dof:    270'
+xi_g_width              :: 'reduced χ²:     1.9±    0.16, avg:   -0.012±   0.043, #dof:    270'
+
+
+OPTIMIZE_KL: Iteration 0003 ⛰:+2.2019e+04
+OPTIMIZE_KL: #(Nonlinear sampling steps) (1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1)
+OPTIMIZE_KL: #(KL minimization steps) 1
+OPTIMIZE_KL: Likelihood residual(s):
+'reduced χ²:    0.74±     0.7, avg:    +0.18±    0.29, #dof:   8193'
+
+OPTIMIZE_KL: Prior residual(s):
+ps_template_scale       :: 'reduced χ²:    0.86±     1.3, avg:   +0.045±    0.93, #dof:      1'
+s_flexibility           :: 'reduced χ²:     3.9±     3.1, avg:     -1.8±    0.86, #dof:      1'
+s_fluctuations          :: 'reduced χ²:     4.2±     1.1, avg:     -2.0±    0.26, #dof:      1'
+s_loglogavgslope        :: 'reduced χ²:     1.7±     2.9, avg:    -0.74±     1.1, #dof:      1'
+s_spectrum              :: 'reduced χ²:     1.1±   0.011, avg:  -0.0059±  0.0083, #dof:  16382'
+s_xi                    :: 'reduced χ²:     1.1±  0.0087, avg:   -0.005±  0.0069, #dof:  16385'
+s_zeromode              :: 'reduced χ²:     1.3±     1.3, avg:   +0.013±     1.2, #dof:      1'
+xi_g_amp                :: 'reduced χ²:     1.8±    0.13, avg:   +0.023±    0.04, #dof:    270'
+xi_g_width              :: 'reduced χ²:     1.9±    0.11, avg:   -0.012±   0.054, #dof:    270'
+
+
+OPTIMIZE_KL: Iteration 0004 ⛰:+2.1195e+04
+OPTIMIZE_KL: #(Nonlinear sampling steps) (1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1)
+OPTIMIZE_KL: #(KL minimization steps) 1
+OPTIMIZE_KL: Likelihood residual(s):
+'reduced χ²:    0.56±    0.46, avg:    +0.28±    0.28, #dof:   8193'
+
+OPTIMIZE_KL: Prior residual(s):
+ps_template_scale       :: 'reduced χ²:    0.99±     1.9, avg:   +0.072±    0.99, #dof:      1'
+s_flexibility           :: 'reduced χ²:     2.7±     1.9, avg:     -1.5±    0.62, #dof:      1'
+s_fluctuations          :: 'reduced χ²:     4.7±     1.1, avg:     -2.2±    0.25, #dof:      1'
+s_loglogavgslope        :: 'reduced χ²:     1.4±     1.7, avg:    -0.73±    0.94, #dof:      1'
+s_spectrum              :: 'reduced χ²:     1.1±   0.012, avg:  -0.0061±  0.0098, #dof:  16382'
+s_xi                    :: 'reduced χ²:     1.1±  0.0093, avg:   -0.005±  0.0086, #dof:  16385'
+s_zeromode              :: 'reduced χ²:     2.3±     2.4, avg:   +0.013±     1.5, #dof:      1'
+xi_g_amp                :: 'reduced χ²:     1.7±    0.13, avg:    +0.02±   0.037, #dof:    270'
+xi_g_width              :: 'reduced χ²:     1.9±    0.14, avg:   -0.012±   0.077, #dof:    270'
+
+
+OPTIMIZE_KL: Iteration 0005 ⛰:+2.0283e+04
+OPTIMIZE_KL: #(Nonlinear sampling steps) (1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1)
+OPTIMIZE_KL: #(KL minimization steps) 1
+OPTIMIZE_KL: Likelihood residual(s):
+'reduced χ²:    0.33±   0.059, avg:    +0.13±   0.044, #dof:   8193'
+
+OPTIMIZE_KL: Prior residual(s):
+ps_template_scale       :: 'reduced χ²:    0.84±     1.1, avg:    +0.12±    0.91, #dof:      1'
+s_flexibility           :: 'reduced χ²:     2.5±     2.1, avg:     -1.4±    0.71, #dof:      1'
+s_fluctuations          :: 'reduced χ²:     5.0±    0.66, avg:     -2.2±    0.15, #dof:      1'
+s_loglogavgslope        :: 'reduced χ²:     1.4±     1.6, avg:    -0.66±    0.99, #dof:      1'
+s_spectrum              :: 'reduced χ²:     1.1±  0.0065, avg:  -0.0066±  0.0089, #dof:  16382'
+s_xi                    :: 'reduced χ²:     1.1±   0.012, avg:  -0.0049±  0.0045, #dof:  16385'
+s_zeromode              :: 'reduced χ²:    0.44±    0.97, avg:   +0.013±    0.66, #dof:      1'
+xi_g_amp                :: 'reduced χ²:     1.7±   0.094, avg:   +0.015±   0.037, #dof:    270'
+xi_g_width              :: 'reduced χ²:     1.9±    0.14, avg:   -0.012±   0.035, #dof:    270'
+
+
+OPTIMIZE_KL: Iteration 0006 ⛰:+2.0194e+04
+OPTIMIZE_KL: #(Nonlinear sampling steps) (1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1)
+OPTIMIZE_KL: #(KL minimization steps) 1
+OPTIMIZE_KL: Likelihood residual(s):
+'reduced χ²:     0.3±   0.055, avg:    +0.13±   0.074, #dof:   8193'
+
+OPTIMIZE_KL: Prior residual(s):
+ps_template_scale       :: 'reduced χ²:     1.4±     1.2, avg:    +0.18±     1.2, #dof:      1'
+s_flexibility           :: 'reduced χ²:     2.3±     2.0, avg:     -1.4±    0.72, #dof:      1'
+s_fluctuations          :: 'reduced χ²:     5.1±     1.4, avg:     -2.2±    0.33, #dof:      1'
+s_loglogavgslope        :: 'reduced χ²:    0.85±     1.0, avg:    -0.58±    0.71, #dof:      1'
+s_spectrum              :: 'reduced χ²:     1.1±   0.011, avg:  -0.0067±  0.0065, #dof:  16382'
+s_xi                    :: 'reduced χ²:     1.1±   0.013, avg:  -0.0047±  0.0098, #dof:  16385'
+s_zeromode              :: 'reduced χ²:     1.5±     2.4, avg:   +0.013±     1.2, #dof:      1'
+xi_g_amp                :: 'reduced χ²:     1.7±    0.12, avg:  +0.0086±   0.054, #dof:    270'
+xi_g_width              :: 'reduced χ²:     1.9±    0.12, avg:   -0.012±   0.065, #dof:    270'
+
+
+OPTIMIZE_KL: Iteration 0007 ⛰:+2.0268e+04
+OPTIMIZE_KL: #(Nonlinear sampling steps) (1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1)
+OPTIMIZE_KL: #(KL minimization steps) 1
+OPTIMIZE_KL: Likelihood residual(s):
+'reduced χ²:    0.32±   0.057, avg:    +0.13±   0.092, #dof:   8193'
+
+OPTIMIZE_KL: Prior residual(s):
+ps_template_scale       :: 'reduced χ²:     2.4±     3.0, avg:    +0.23±     1.5, #dof:      1'
+s_flexibility           :: 'reduced χ²:     2.5±     2.4, avg:     -1.3±    0.84, #dof:      1'
+s_fluctuations          :: 'reduced χ²:     5.0±    0.83, avg:     -2.2±    0.18, #dof:      1'
+s_loglogavgslope        :: 'reduced χ²:     1.3±     1.5, avg:    -0.58±    0.99, #dof:      1'
+s_spectrum              :: 'reduced χ²:     1.1±   0.012, avg:  -0.0068±  0.0053, #dof:  16382'
+s_xi                    :: 'reduced χ²:     1.1±   0.014, avg:  -0.0047±  0.0065, #dof:  16385'
+s_zeromode              :: 'reduced χ²:    0.45±    0.66, avg:   +0.013±    0.67, #dof:      1'
+xi_g_amp                :: 'reduced χ²:     1.8±    0.16, avg:  +0.0033±   0.059, #dof:    270'
+xi_g_width              :: 'reduced χ²:     1.9±    0.15, avg:   -0.012±   0.054, #dof:    270'
+
+
+OPTIMIZE_KL: Iteration 0008 ⛰:+2.0040e+04
+OPTIMIZE_KL: #(Nonlinear sampling steps) (1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1)
+OPTIMIZE_KL: #(KL minimization steps) 1
+OPTIMIZE_KL: Likelihood residual(s):
+'reduced χ²:    0.27±   0.029, avg:    +0.11±   0.027, #dof:   8193'
+
+OPTIMIZE_KL: Prior residual(s):
+ps_template_scale       :: 'reduced χ²:     1.1±     1.1, avg:    +0.26±     1.0, #dof:      1'
+s_flexibility           :: 'reduced χ²:     2.5±     2.4, avg:     -1.3±    0.88, #dof:      1'
+s_fluctuations          :: 'reduced χ²:     5.1±    0.77, avg:     -2.3±    0.17, #dof:      1'
+s_loglogavgslope        :: 'reduced χ²:     1.5±     1.6, avg:    -0.68±     1.0, #dof:      1'
+s_spectrum              :: 'reduced χ²:     1.1±  0.0081, avg:  -0.0068±  0.0082, #dof:  16382'
+s_xi                    :: 'reduced χ²:     1.1±   0.012, avg:  -0.0047±   0.007, #dof:  16385'
+s_zeromode              :: 'reduced χ²:    0.83±    0.59, avg:   +0.013±    0.91, #dof:      1'
+xi_g_amp                :: 'reduced χ²:     1.7±    0.13, avg:   +0.001±    0.06, #dof:    270'
+xi_g_width              :: 'reduced χ²:     1.9±    0.13, avg:   -0.012±   0.048, #dof:    270'
+
+
+OPTIMIZE_KL: Iteration 0009 ⛰:+2.0032e+04
+OPTIMIZE_KL: #(Nonlinear sampling steps) (1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1)
+OPTIMIZE_KL: #(KL minimization steps) 1
+OPTIMIZE_KL: Likelihood residual(s):
+'reduced χ²:    0.27±   0.047, avg:   +0.092±   0.058, #dof:   8193'
+
+OPTIMIZE_KL: Prior residual(s):
+ps_template_scale       :: 'reduced χ²:    0.53±    0.82, avg:    +0.26±    0.68, #dof:      1'
+s_flexibility           :: 'reduced χ²:     2.0±     1.4, avg:     -1.3±    0.54, #dof:      1'
+s_fluctuations          :: 'reduced χ²:     5.1±    0.86, avg:     -2.2±    0.19, #dof:      1'
+s_loglogavgslope        :: 'reduced χ²:     2.2±     2.8, avg:    -0.92±     1.2, #dof:      1'
+s_spectrum              :: 'reduced χ²:     1.1±  0.0097, avg:  -0.0069±  0.0061, #dof:  16382'
+s_xi                    :: 'reduced χ²:     1.1±   0.011, avg:  -0.0046±  0.0088, #dof:  16385'
+s_zeromode              :: 'reduced χ²:    0.53±    0.42, avg:   +0.013±    0.73, #dof:      1'
+xi_g_amp                :: 'reduced χ²:     1.7±    0.11, avg: +0.00061±   0.053, #dof:    270'
+xi_g_width              :: 'reduced χ²:     1.9±    0.15, avg:   -0.012±   0.061, #dof:    270'
+
+
+OPTIMIZE_KL: Iteration 0010 ⛰:+1.9988e+04
+OPTIMIZE_KL: #(Nonlinear sampling steps) (1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1)
+OPTIMIZE_KL: #(KL minimization steps) 1
+OPTIMIZE_KL: Likelihood residual(s):
+'reduced χ²:    0.26±   0.021, avg:    +0.11±   0.043, #dof:   8193'
+
+OPTIMIZE_KL: Prior residual(s):
+ps_template_scale       :: 'reduced χ²:     1.2±     1.4, avg:    +0.31±     1.0, #dof:      1'
+s_flexibility           :: 'reduced χ²:     1.9±     1.4, avg:     -1.3±    0.54, #dof:      1'
+s_fluctuations          :: 'reduced χ²:     5.1±    0.98, avg:     -2.3±    0.22, #dof:      1'
+s_loglogavgslope        :: 'reduced χ²:     2.6±     3.0, avg:     -1.1±     1.2, #dof:      1'
+s_spectrum              :: 'reduced χ²:     1.1±  0.0074, avg:  -0.0068±  0.0069, #dof:  16382'
+s_xi                    :: 'reduced χ²:     1.1±   0.011, avg:  -0.0046±  0.0079, #dof:  16385'
+s_zeromode              :: 'reduced χ²:    0.34±    0.45, avg:   +0.012±    0.58, #dof:      1'
+xi_g_amp                :: 'reduced χ²:     1.7±   0.076, avg:  -0.0042±   0.086, #dof:    270'
+xi_g_width              :: 'reduced χ²:     1.8±    0.13, avg:   -0.012±    0.05, #dof:    270'
+
+
+OPTIMIZE_KL: Iteration 0011 ⛰:+2.1569e+04
+OPTIMIZE_KL: #(Nonlinear sampling steps) (1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1)
+OPTIMIZE_KL: #(KL minimization steps) 1
+OPTIMIZE_KL: Likelihood residual(s):
+'reduced χ²:    0.66±     1.2, avg:    +0.14±    0.19, #dof:   8193'
+
+OPTIMIZE_KL: Prior residual(s):
+ps_template_scale       :: 'reduced χ²:     0.2±    0.23, avg:    +0.31±    0.33, #dof:      1'
+s_flexibility           :: 'reduced χ²:     2.0±     1.6, avg:     -1.3±    0.61, #dof:      1'
+s_fluctuations          :: 'reduced χ²:     5.6±    0.87, avg:     -2.4±    0.18, #dof:      1'
+s_loglogavgslope        :: 'reduced χ²:     1.4±     1.7, avg:    -0.76±    0.91, #dof:      1'
+s_spectrum              :: 'reduced χ²:     1.1±   0.012, avg:  -0.0072±   0.006, #dof:  16382'
+s_xi                    :: 'reduced χ²:     1.1±   0.014, avg:  -0.0046±  0.0089, #dof:  16385'
+s_zeromode              :: 'reduced χ²:     1.8±     2.4, avg:   +0.012±     1.4, #dof:      1'
+xi_g_amp                :: 'reduced χ²:     1.7±    0.12, avg:  -0.0049±   0.064, #dof:    270'
+xi_g_width              :: 'reduced χ²:     1.8±    0.15, avg:   -0.012±   0.054, #dof:    270'
+
+
+OPTIMIZE_KL: Iteration 0012 ⛰:+2.0133e+04
+OPTIMIZE_KL: #(Nonlinear sampling steps) (1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1)
+OPTIMIZE_KL: #(KL minimization steps) 1
+OPTIMIZE_KL: Likelihood residual(s):
+'reduced χ²:    0.31±    0.15, avg:    +0.11±   0.059, #dof:   8193'
+
+OPTIMIZE_KL: Prior residual(s):
+ps_template_scale       :: 'reduced χ²:    0.79±     1.1, avg:    +0.33±    0.82, #dof:      1'
+s_flexibility           :: 'reduced χ²:     1.8±     1.2, avg:     -1.3±    0.45, #dof:      1'
+s_fluctuations          :: 'reduced χ²:     5.3±    0.91, avg:     -2.3±     0.2, #dof:      1'
+s_loglogavgslope        :: 'reduced χ²:     1.4±     1.8, avg:     -0.8±    0.89, #dof:      1'
+s_spectrum              :: 'reduced χ²:     1.1±  0.0095, avg:  -0.0073±  0.0076, #dof:  16382'
+s_xi                    :: 'reduced χ²:     1.1±  0.0096, avg:  -0.0046±  0.0074, #dof:  16385'
+s_zeromode              :: 'reduced χ²:     1.1±     1.1, avg:   +0.012±     1.0, #dof:      1'
+xi_g_amp                :: 'reduced χ²:     1.7±    0.13, avg:  -0.0067±   0.052, #dof:    270'
+xi_g_width              :: 'reduced χ²:     1.9±    0.16, avg:   -0.012±   0.069, #dof:    270'
+
+
+OPTIMIZE_KL: Iteration 0013 ⛰:+2.0201e+04
+OPTIMIZE_KL: #(Nonlinear sampling steps) (1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1)
+OPTIMIZE_KL: #(KL minimization steps) 1
+OPTIMIZE_KL: Likelihood residual(s):
+'reduced χ²:    0.31±    0.34, avg:     +0.1±    0.11, #dof:   8193'
+
+OPTIMIZE_KL: Prior residual(s):
+ps_template_scale       :: 'reduced χ²:     1.2±     1.5, avg:    +0.34±     1.0, #dof:      1'
+s_flexibility           :: 'reduced χ²:     1.8±     1.3, avg:     -1.2±    0.52, #dof:      1'
+s_fluctuations          :: 'reduced χ²:     5.4±     0.8, avg:     -2.3±    0.17, #dof:      1'
+s_loglogavgslope        :: 'reduced χ²:     1.8±     2.2, avg:    -0.95±    0.94, #dof:      1'
+s_spectrum              :: 'reduced χ²:     1.1±   0.013, avg:  -0.0073±  0.0085, #dof:  16382'
+s_xi                    :: 'reduced χ²:     1.1±   0.013, avg:  -0.0046±   0.007, #dof:  16385'
+s_zeromode              :: 'reduced χ²:    0.99±     1.3, avg:   +0.012±     1.0, #dof:      1'
+xi_g_amp                :: 'reduced χ²:     1.7±    0.12, avg:  -0.0077±   0.059, #dof:    270'
+xi_g_width              :: 'reduced χ²:     1.9±    0.15, avg:   -0.012±   0.074, #dof:    270'
+
+
+OPTIMIZE_KL: Iteration 0014 ⛰:+2.0086e+04
+OPTIMIZE_KL: #(Nonlinear sampling steps) (1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1)
+OPTIMIZE_KL: #(KL minimization steps) 1
+OPTIMIZE_KL: Likelihood residual(s):
+'reduced χ²:    0.28±    0.11, avg:   +0.099±   0.068, #dof:   8193'
+
+OPTIMIZE_KL: Prior residual(s):
+ps_template_scale       :: 'reduced χ²:    0.82±    0.98, avg:    +0.35±    0.84, #dof:      1'
+s_flexibility           :: 'reduced χ²:     1.8±     1.4, avg:     -1.2±    0.52, #dof:      1'
+s_fluctuations          :: 'reduced χ²:     5.4±     1.1, avg:     -2.3±    0.24, #dof:      1'
+s_loglogavgslope        :: 'reduced χ²:     2.9±     3.3, avg:     -1.2±     1.2, #dof:      1'
+s_spectrum              :: 'reduced χ²:     1.1±  0.0095, avg:  -0.0073±  0.0069, #dof:  16382'
+s_xi                    :: 'reduced χ²:     1.1±   0.013, avg:  -0.0046±   0.007, #dof:  16385'
+s_zeromode              :: 'reduced χ²:     1.0±     1.9, avg:   +0.012±     1.0, #dof:      1'
+xi_g_amp                :: 'reduced χ²:     1.7±    0.13, avg:  -0.0086±   0.059, #dof:    270'
+xi_g_width              :: 'reduced χ²:     1.9±    0.16, avg:   -0.012±   0.057, #dof:    270'
+
+
+OPTIMIZE_KL: Iteration 0015 ⛰:+1.9907e+04
+OPTIMIZE_KL: #(Nonlinear sampling steps) (1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1)
+OPTIMIZE_KL: #(KL minimization steps) 1
+OPTIMIZE_KL: Likelihood residual(s):
+'reduced χ²:    0.26±   0.039, avg:   +0.099±   0.054, #dof:   8193'
+
+OPTIMIZE_KL: Prior residual(s):
+ps_template_scale       :: 'reduced χ²:    0.83±    0.99, avg:    +0.38±    0.83, #dof:      1'
+s_flexibility           :: 'reduced χ²:     2.0±     1.6, avg:     -1.3±     0.6, #dof:      1'
+s_fluctuations          :: 'reduced χ²:     5.3±     1.0, avg:     -2.3±    0.22, #dof:      1'
+s_loglogavgslope        :: 'reduced χ²:     2.2±     2.6, avg:     -1.1±    0.97, #dof:      1'
+s_spectrum              :: 'reduced χ²:     1.1±   0.011, avg:   -0.007±   0.009, #dof:  16382'
+s_xi                    :: 'reduced χ²:     1.1±   0.012, avg:  -0.0045±  0.0069, #dof:  16385'
+s_zeromode              :: 'reduced χ²:     1.1±     1.3, avg:   +0.012±     1.0, #dof:      1'
+xi_g_amp                :: 'reduced χ²:     1.7±    0.11, avg:   -0.012±   0.069, #dof:    270'
+xi_g_width              :: 'reduced χ²:     1.9±    0.15, avg:   -0.012±   0.068, #dof:    270'
+
+
+OPTIMIZE_KL: Iteration 0016 ⛰:+2.0167e+04
+OPTIMIZE_KL: #(Nonlinear sampling steps) (1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1)
+OPTIMIZE_KL: #(KL minimization steps) 1
+OPTIMIZE_KL: Likelihood residual(s):
+'reduced χ²:    0.31±    0.39, avg:     +0.1±    0.12, #dof:   8193'
+
+OPTIMIZE_KL: Prior residual(s):
+ps_template_scale       :: 'reduced χ²:     1.1±     1.6, avg:    +0.39±    0.95, #dof:      1'
+s_flexibility           :: 'reduced χ²:     2.0±     1.4, avg:     -1.3±    0.55, #dof:      1'
+s_fluctuations          :: 'reduced χ²:     5.4±    0.88, avg:     -2.3±    0.19, #dof:      1'
+s_loglogavgslope        :: 'reduced χ²:     2.6±     2.8, avg:     -1.2±     1.1, #dof:      1'
+s_spectrum              :: 'reduced χ²:     1.1±   0.015, avg:  -0.0071±  0.0085, #dof:  16382'
+s_xi                    :: 'reduced χ²:     1.1±   0.013, avg:  -0.0046±  0.0076, #dof:  16385'
+s_zeromode              :: 'reduced χ²:     1.1±     1.7, avg:   +0.012±     1.1, #dof:      1'
+xi_g_amp                :: 'reduced χ²:     1.7±    0.14, avg:   -0.013±   0.078, #dof:    270'
+xi_g_width              :: 'reduced χ²:     1.9±    0.14, avg:   -0.012±   0.063, #dof:    270'
+
+
+OPTIMIZE_KL: Iteration 0017 ⛰:+1.9958e+04
+OPTIMIZE_KL: #(Nonlinear sampling steps) (1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1)
+OPTIMIZE_KL: #(KL minimization steps) 1
+OPTIMIZE_KL: Likelihood residual(s):
+'reduced χ²:    0.26±    0.11, avg:   +0.095±   0.065, #dof:   8193'
+
+OPTIMIZE_KL: Prior residual(s):
+ps_template_scale       :: 'reduced χ²:     1.3±     1.9, avg:    +0.41±     1.1, #dof:      1'
+s_flexibility           :: 'reduced χ²:     2.0±     1.3, avg:     -1.3±    0.46, #dof:      1'
+s_fluctuations          :: 'reduced χ²:     5.4±     0.9, avg:     -2.3±     0.2, #dof:      1'
+s_loglogavgslope        :: 'reduced χ²:     2.7±     2.8, avg:     -1.4±     0.9, #dof:      1'
+s_spectrum              :: 'reduced χ²:     1.1±   0.013, avg:  -0.0072±  0.0073, #dof:  16382'
+s_xi                    :: 'reduced χ²:     1.1±   0.012, avg:  -0.0045±   0.007, #dof:  16385'
+s_zeromode              :: 'reduced χ²:     1.1±     1.9, avg:   +0.012±     1.0, #dof:      1'
+xi_g_amp                :: 'reduced χ²:     1.7±    0.13, avg:   -0.015±    0.04, #dof:    270'
+xi_g_width              :: 'reduced χ²:     1.9±    0.14, avg:   -0.012±   0.063, #dof:    270'
+
+
+OPTIMIZE_KL: Iteration 0018 ⛰:+2.0322e+04
+OPTIMIZE_KL: #(Nonlinear sampling steps) (1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1)
+OPTIMIZE_KL: #(KL minimization steps) 1
+OPTIMIZE_KL: Likelihood residual(s):
+'reduced χ²:    0.36±    0.53, avg:     +0.1±    0.12, #dof:   8193'
+
+OPTIMIZE_KL: Prior residual(s):
+ps_template_scale       :: 'reduced χ²:     1.0±     1.3, avg:    +0.42±    0.93, #dof:      1'
+s_flexibility           :: 'reduced χ²:     2.1±     1.3, avg:     -1.4±    0.46, #dof:      1'
+s_fluctuations          :: 'reduced χ²:     5.5±     1.3, avg:     -2.3±    0.27, #dof:      1'
+s_loglogavgslope        :: 'reduced χ²:     2.8±     3.0, avg:     -1.3±     1.1, #dof:      1'
+s_spectrum              :: 'reduced χ²:     1.1±   0.012, avg:  -0.0073±  0.0054, #dof:  16382'
+s_xi                    :: 'reduced χ²:     1.1±   0.014, avg:  -0.0046±  0.0071, #dof:  16385'
+s_zeromode              :: 'reduced χ²:     1.1±     1.3, avg:   +0.012±     1.1, #dof:      1'
+xi_g_amp                :: 'reduced χ²:     1.6±    0.12, avg:   -0.016±   0.056, #dof:    270'
+xi_g_width              :: 'reduced χ²:     1.9±    0.13, avg:   -0.012±   0.039, #dof:    270'
+
+
+OPTIMIZE_KL: Iteration 0019 ⛰:+2.0247e+04
+OPTIMIZE_KL: #(Nonlinear sampling steps) (1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1)
+OPTIMIZE_KL: #(KL minimization steps) 1
+OPTIMIZE_KL: Likelihood residual(s):
+'reduced χ²:    0.34±    0.34, avg:    +0.11±   0.097, #dof:   8193'
+
+OPTIMIZE_KL: Prior residual(s):
+ps_template_scale       :: 'reduced χ²:     1.2±     1.6, avg:    +0.43±     1.0, #dof:      1'
+s_flexibility           :: 'reduced χ²:     2.2±     1.6, avg:     -1.4±    0.57, #dof:      1'
+s_fluctuations          :: 'reduced χ²:     5.5±     1.1, avg:     -2.3±    0.23, #dof:      1'
+s_loglogavgslope        :: 'reduced χ²:     3.3±     3.8, avg:     -1.4±     1.2, #dof:      1'
+s_spectrum              :: 'reduced χ²:     1.1±   0.012, avg:  -0.0072±  0.0076, #dof:  16382'
+s_xi                    :: 'reduced χ²:     1.1±   0.012, avg:  -0.0045±  0.0067, #dof:  16385'
+s_zeromode              :: 'reduced χ²:    0.64±    0.78, avg:   +0.012±     0.8, #dof:      1'
+xi_g_amp                :: 'reduced χ²:     1.7±    0.14, avg:   -0.017±   0.054, #dof:    270'
+xi_g_width              :: 'reduced χ²:     1.8±    0.14, avg:   -0.012±   0.066, #dof:    270'
+
+
+OPTIMIZE_KL: Iteration 0020 ⛰:+2.0287e+04
+OPTIMIZE_KL: #(Nonlinear sampling steps) (1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1)
+OPTIMIZE_KL: #(KL minimization steps) 1
+OPTIMIZE_KL: Likelihood residual(s):
+'reduced χ²:    0.35±    0.53, avg:     +0.1±   0.092, #dof:   8193'
+
+OPTIMIZE_KL: Prior residual(s):
+ps_template_scale       :: 'reduced χ²:     1.0±     1.2, avg:    +0.44±    0.92, #dof:      1'
+s_flexibility           :: 'reduced χ²:     2.3±     1.5, avg:     -1.4±    0.52, #dof:      1'
+s_fluctuations          :: 'reduced χ²:     5.6±    0.88, avg:     -2.4±    0.18, #dof:      1'
+s_loglogavgslope        :: 'reduced χ²:     3.1±     3.4, avg:     -1.4±     1.1, #dof:      1'
+s_spectrum              :: 'reduced χ²:     1.1±   0.012, avg:  -0.0072±  0.0077, #dof:  16382'
+s_xi                    :: 'reduced χ²:     1.1±   0.013, avg:  -0.0045±  0.0068, #dof:  16385'
+s_zeromode              :: 'reduced χ²:    0.81±     1.1, avg:   +0.012±     0.9, #dof:      1'
+xi_g_amp                :: 'reduced χ²:     1.7±    0.13, avg:   -0.018±   0.066, #dof:    270'
+xi_g_width              :: 'reduced χ²:     1.9±    0.14, avg:   -0.012±   0.056, #dof:    270'
+
+
+OPTIMIZE_KL: Iteration 0021 ⛰:+1.9892e+04
+OPTIMIZE_KL: #(Nonlinear sampling steps) (1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1)
+OPTIMIZE_KL: #(KL minimization steps) 1
+OPTIMIZE_KL: Likelihood residual(s):
+'reduced χ²:    0.25±    0.11, avg:   +0.097±   0.063, #dof:   8193'
+
+OPTIMIZE_KL: Prior residual(s):
+ps_template_scale       :: 'reduced χ²:    0.99±     1.2, avg:    +0.44±    0.89, #dof:      1'
+s_flexibility           :: 'reduced χ²:     2.3±     1.1, avg:     -1.5±    0.39, #dof:      1'
+s_fluctuations          :: 'reduced χ²:     5.5±    0.92, avg:     -2.3±     0.2, #dof:      1'
+s_loglogavgslope        :: 'reduced χ²:     2.4±     2.4, avg:     -1.3±    0.85, #dof:      1'
+s_spectrum              :: 'reduced χ²:     1.1±   0.012, avg:  -0.0073±  0.0071, #dof:  16382'
+s_xi                    :: 'reduced χ²:     1.1±   0.012, avg:  -0.0045±  0.0081, #dof:  16385'
+s_zeromode              :: 'reduced χ²:     1.1±     1.8, avg:   +0.012±     1.1, #dof:      1'
+xi_g_amp                :: 'reduced χ²:     1.7±    0.13, avg:   -0.019±   0.069, #dof:    270'
+xi_g_width              :: 'reduced χ²:     1.8±    0.11, avg:   -0.012±   0.053, #dof:    270'
+
+
+OPTIMIZE_KL: Iteration 0022 ⛰:+2.0390e+04
+OPTIMIZE_KL: #(Nonlinear sampling steps) (1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1)
+OPTIMIZE_KL: #(KL minimization steps) 1
+OPTIMIZE_KL: Likelihood residual(s):
+'reduced χ²:    0.36±    0.64, avg:    +0.11±    0.13, #dof:   8193'
+
+OPTIMIZE_KL: Prior residual(s):
+ps_template_scale       :: 'reduced χ²:     1.2±     1.5, avg:    +0.45±    0.98, #dof:      1'
+s_flexibility           :: 'reduced χ²:     2.6±     1.8, avg:     -1.5±    0.61, #dof:      1'
+s_fluctuations          :: 'reduced χ²:     5.5±    0.85, avg:     -2.3±    0.18, #dof:      1'
+s_loglogavgslope        :: 'reduced χ²:     2.0±     2.1, avg:     -1.1±    0.85, #dof:      1'
+s_spectrum              :: 'reduced χ²:     1.1±   0.012, avg:  -0.0075±  0.0075, #dof:  16382'
+s_xi                    :: 'reduced χ²:     1.1±   0.013, avg:  -0.0045±  0.0075, #dof:  16385'
+s_zeromode              :: 'reduced χ²:    0.73±    0.91, avg:   +0.012±    0.85, #dof:      1'
+xi_g_amp                :: 'reduced χ²:     1.7±    0.15, avg:    -0.02±   0.053, #dof:    270'
+xi_g_width              :: 'reduced χ²:     1.8±    0.13, avg:   -0.012±   0.061, #dof:    270'
+
+
+OPTIMIZE_KL: Iteration 0023 ⛰:+1.9824e+04
+OPTIMIZE_KL: #(Nonlinear sampling steps) (1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1)
+OPTIMIZE_KL: #(KL minimization steps) 1
+OPTIMIZE_KL: Likelihood residual(s):
+'reduced χ²:    0.23±    0.11, avg:   +0.082±   0.046, #dof:   8193'
+
+OPTIMIZE_KL: Prior residual(s):
+ps_template_scale       :: 'reduced χ²:     1.1±     1.2, avg:    +0.45±    0.94, #dof:      1'
+s_flexibility           :: 'reduced χ²:     2.4±    0.98, avg:     -1.5±    0.32, #dof:      1'
+s_fluctuations          :: 'reduced χ²:     5.5±     1.1, avg:     -2.3±    0.24, #dof:      1'
+s_loglogavgslope        :: 'reduced χ²:     2.1±     2.2, avg:     -1.1±    0.87, #dof:      1'
+s_spectrum              :: 'reduced χ²:     1.1±   0.012, avg:  -0.0075±  0.0085, #dof:  16382'
+s_xi                    :: 'reduced χ²:     1.1±   0.011, avg:  -0.0045±  0.0084, #dof:  16385'
+s_zeromode              :: 'reduced χ²:    0.87±     1.4, avg:   +0.012±    0.93, #dof:      1'
+xi_g_amp                :: 'reduced χ²:     1.6±    0.11, avg:    -0.02±   0.047, #dof:    270'
+xi_g_width              :: 'reduced χ²:     1.8±    0.15, avg:   -0.012±   0.053, #dof:    270'
+
+
+OPTIMIZE_KL: Iteration 0024 ⛰:+2.1983e+04
+OPTIMIZE_KL: #(Nonlinear sampling steps) (1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1)
+OPTIMIZE_KL: #(KL minimization steps) 1
+OPTIMIZE_KL: Likelihood residual(s):
+'reduced χ²:    0.76±     2.4, avg:    +0.14±    0.16, #dof:   8193'
+
+OPTIMIZE_KL: Prior residual(s):
+ps_template_scale       :: 'reduced χ²:     1.5±     1.6, avg:    +0.48±     1.1, #dof:      1'
+s_flexibility           :: 'reduced χ²:     3.1±     1.7, avg:     -1.7±     0.5, #dof:      1'
+s_fluctuations          :: 'reduced χ²:     6.5±     1.1, avg:     -2.5±    0.21, #dof:      1'
+s_loglogavgslope        :: 'reduced χ²:     2.0±     2.4, avg:    -0.96±     1.0, #dof:      1'
+s_spectrum              :: 'reduced χ²:     1.1±   0.013, avg:  -0.0069±  0.0083, #dof:  16382'
+s_xi                    :: 'reduced χ²:     1.1±   0.011, avg:  -0.0046±  0.0068, #dof:  16385'
+s_zeromode              :: 'reduced χ²:    0.94±     1.2, avg:   +0.012±    0.97, #dof:      1'
+xi_g_amp                :: 'reduced χ²:     1.6±    0.11, avg:   -0.022±   0.069, #dof:    270'
+xi_g_width              :: 'reduced χ²:     1.8±    0.14, avg:   -0.011±   0.069, #dof:    270'
+
+
+OPTIMIZE_KL: Iteration 0025 ⛰:+1.9820e+04
+OPTIMIZE_KL: #(Nonlinear sampling steps) (1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1)
+OPTIMIZE_KL: #(KL minimization steps) 1
+OPTIMIZE_KL: Likelihood residual(s):
+'reduced χ²:    0.25±    0.12, avg:   +0.091±    0.08, #dof:   8193'
+
+OPTIMIZE_KL: Prior residual(s):
+ps_template_scale       :: 'reduced χ²:    0.93±     1.1, avg:    +0.46±    0.85, #dof:      1'
+s_flexibility           :: 'reduced χ²:     3.0±     1.5, avg:     -1.7±    0.45, #dof:      1'
+s_fluctuations          :: 'reduced χ²:     6.2±     1.0, avg:     -2.5±    0.21, #dof:      1'
+s_loglogavgslope        :: 'reduced χ²:     1.7±     1.9, avg:    -0.96±     0.9, #dof:      1'
+s_spectrum              :: 'reduced χ²:     1.1±   0.013, avg:  -0.0072±  0.0064, #dof:  16382'
+s_xi                    :: 'reduced χ²:     1.1±   0.012, avg:  -0.0046±  0.0077, #dof:  16385'
+s_zeromode              :: 'reduced χ²:    0.98±     1.2, avg:   +0.012±    0.99, #dof:      1'
+xi_g_amp                :: 'reduced χ²:     1.6±    0.14, avg:   -0.022±   0.055, #dof:    270'
+xi_g_width              :: 'reduced χ²:     1.8±    0.14, avg:   -0.011±   0.074, #dof:    270'
+
+
+OPTIMIZE_KL: Iteration 0026 ⛰:+1.9703e+04
+OPTIMIZE_KL: #(Nonlinear sampling steps) (1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1)
+OPTIMIZE_KL: #(KL minimization steps) 1
+OPTIMIZE_KL: Likelihood residual(s):
+'reduced χ²:    0.22±   0.047, avg:    +0.08±   0.051, #dof:   8193'
+
+OPTIMIZE_KL: Prior residual(s):
+ps_template_scale       :: 'reduced χ²:     1.4±     1.4, avg:    +0.47±     1.1, #dof:      1'
+s_flexibility           :: 'reduced χ²:     3.2±     1.8, avg:     -1.7±    0.52, #dof:      1'
+s_fluctuations          :: 'reduced χ²:     6.1±    0.92, avg:     -2.5±    0.19, #dof:      1'
+s_loglogavgslope        :: 'reduced χ²:     1.8±     2.0, avg:    -0.99±    0.91, #dof:      1'
+s_spectrum              :: 'reduced χ²:     1.1±   0.012, avg:  -0.0072±  0.0085, #dof:  16382'
+s_xi                    :: 'reduced χ²:     1.1±   0.011, avg:  -0.0046±  0.0081, #dof:  16385'
+s_zeromode              :: 'reduced χ²:     1.4±     2.8, avg:   +0.012±     1.2, #dof:      1'
+xi_g_amp                :: 'reduced χ²:     1.7±    0.13, avg:   -0.023±   0.057, #dof:    270'
+xi_g_width              :: 'reduced χ²:     1.8±    0.15, avg:   -0.011±   0.047, #dof:    270'
+
+
+OPTIMIZE_KL: Iteration 0027 ⛰:+2.0680e+04
+OPTIMIZE_KL: #(Nonlinear sampling steps) (1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1)
+OPTIMIZE_KL: #(KL minimization steps) 1
+OPTIMIZE_KL: Likelihood residual(s):
+'reduced χ²:    0.46±     1.1, avg:    +0.12±    0.15, #dof:   8193'
+
+OPTIMIZE_KL: Prior residual(s):
+ps_template_scale       :: 'reduced χ²:     1.3±     1.6, avg:    +0.48±     1.0, #dof:      1'
+s_flexibility           :: 'reduced χ²:     3.5±     2.1, avg:     -1.8±    0.58, #dof:      1'
+s_fluctuations          :: 'reduced χ²:     6.4±     1.2, avg:     -2.5±    0.23, #dof:      1'
+s_loglogavgslope        :: 'reduced χ²:     1.5±     1.7, avg:    -0.83±    0.88, #dof:      1'
+s_spectrum              :: 'reduced χ²:     1.1±   0.011, avg:  -0.0073±  0.0078, #dof:  16382'
+s_xi                    :: 'reduced χ²:     1.1±   0.013, avg:  -0.0046±  0.0058, #dof:  16385'
+s_zeromode              :: 'reduced χ²:    0.95±     1.7, avg:   +0.012±    0.97, #dof:      1'
+xi_g_amp                :: 'reduced χ²:     1.6±    0.12, avg:   -0.024±   0.062, #dof:    270'
+xi_g_width              :: 'reduced χ²:     1.8±    0.13, avg:   -0.011±   0.041, #dof:    270'
+
+
+OPTIMIZE_KL: Iteration 0028 ⛰:+2.1511e+04
+OPTIMIZE_KL: #(Nonlinear sampling steps) (1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1)
+OPTIMIZE_KL: #(KL minimization steps) 1
+OPTIMIZE_KL: Likelihood residual(s):
+'reduced χ²:    0.66±     3.1, avg:   +0.099±    0.12, #dof:   8193'
+
+OPTIMIZE_KL: Prior residual(s):
+ps_template_scale       :: 'reduced χ²:     1.5±     2.1, avg:    +0.49±     1.1, #dof:      1'
+s_flexibility           :: 'reduced χ²:     3.6±     2.0, avg:     -1.8±    0.55, #dof:      1'
+s_fluctuations          :: 'reduced χ²:     6.4±    0.95, avg:     -2.5±    0.19, #dof:      1'
+s_loglogavgslope        :: 'reduced χ²:     1.6±     2.3, avg:    -0.79±    0.98, #dof:      1'
+s_spectrum              :: 'reduced χ²:     1.1±    0.01, avg:  -0.0078±  0.0081, #dof:  16382'
+s_xi                    :: 'reduced χ²:     1.1±   0.012, avg:  -0.0046±  0.0075, #dof:  16385'
+s_zeromode              :: 'reduced χ²:    0.73±     1.2, avg:   +0.012±    0.86, #dof:      1'
+xi_g_amp                :: 'reduced χ²:     1.6±    0.11, avg:   -0.024±   0.056, #dof:    270'
+xi_g_width              :: 'reduced χ²:     1.8±    0.13, avg:   -0.011±   0.071, #dof:    270'
+
+
+OPTIMIZE_KL: Iteration 0029 ⛰:+2.0681e+04
+OPTIMIZE_KL: #(Nonlinear sampling steps) (1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1)
+OPTIMIZE_KL: #(KL minimization steps) 1
+OPTIMIZE_KL: Likelihood residual(s):
+'reduced χ²:    0.45±     1.1, avg:    +0.12±     0.2, #dof:   8193'
+
+OPTIMIZE_KL: Prior residual(s):
+ps_template_scale       :: 'reduced χ²:     1.2±     1.9, avg:     +0.5±    0.97, #dof:      1'
+s_flexibility           :: 'reduced χ²:     3.6±     1.7, avg:     -1.8±    0.47, #dof:      1'
+s_fluctuations          :: 'reduced χ²:     6.6±     1.0, avg:     -2.6±     0.2, #dof:      1'
+s_loglogavgslope        :: 'reduced χ²:     2.0±     2.4, avg:    -0.93±     1.1, #dof:      1'
+s_spectrum              :: 'reduced χ²:     1.1±   0.013, avg:  -0.0076±  0.0096, #dof:  16382'
+s_xi                    :: 'reduced χ²:     1.1±   0.013, avg:  -0.0047±  0.0082, #dof:  16385'
+s_zeromode              :: 'reduced χ²:     1.2±     1.5, avg:   +0.012±     1.1, #dof:      1'
+xi_g_amp                :: 'reduced χ²:     1.6±    0.13, avg:   -0.025±   0.063, #dof:    270'
+xi_g_width              :: 'reduced χ²:     1.8±    0.13, avg:   -0.011±   0.048, #dof:    270'
+
+
+OPTIMIZE_KL: Iteration 0030 ⛰:+1.9750e+04
+OPTIMIZE_KL: #(Nonlinear sampling steps) (1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1)
+OPTIMIZE_KL: #(KL minimization steps) 1
+OPTIMIZE_KL: Likelihood residual(s):
+'reduced χ²:    0.23±    0.11, avg:   +0.084±   0.061, #dof:   8193'
+
+OPTIMIZE_KL: Prior residual(s):
+ps_template_scale       :: 'reduced χ²:     1.3±     1.8, avg:     +0.5±     1.0, #dof:      1'
+s_flexibility           :: 'reduced χ²:     3.7±     1.8, avg:     -1.9±    0.48, #dof:      1'
+s_fluctuations          :: 'reduced χ²:     6.5±    0.89, avg:     -2.5±    0.18, #dof:      1'
+s_loglogavgslope        :: 'reduced χ²:     1.7±     2.0, avg:    -0.92±     0.9, #dof:      1'
+s_spectrum              :: 'reduced χ²:     1.1±   0.011, avg:  -0.0076±   0.007, #dof:  16382'
+s_xi                    :: 'reduced χ²:     1.1±   0.013, avg:  -0.0046±  0.0096, #dof:  16385'
+s_zeromode              :: 'reduced χ²:     1.5±     1.6, avg:   +0.012±     1.2, #dof:      1'
+xi_g_amp                :: 'reduced χ²:     1.6±    0.12, avg:   -0.026±   0.059, #dof:    270'
+xi_g_width              :: 'reduced χ²:     1.8±    0.15, avg:   -0.011±   0.058, #dof:    270'
+

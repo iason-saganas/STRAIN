@@ -13,7 +13,7 @@ def hartley(p, signal_grid):
     return add(tmp.real, tmp.imag) * harmonic_dvol
 
 
-def pseudo_inverse(A, A_T, b):
+def pseudo_inverse(A, A_T, b, itr=10_000):
     r"""
 
     Why this? Because we infer a denser power spectrum compared to the actual data power spectrum resolution.
@@ -55,7 +55,7 @@ def pseudo_inverse(A, A_T, b):
     aa_T = lambda p: A(A_T(p))
 
     cg = static_cg
-    max_iterations = 10_000  # to get a good fit to the data (at least visually, calculate the least squares for your
+    max_iterations = itr  # to get a good fit to the data (at least visually, calculate the least squares for your
     # self one time)
     # max_iterations = 1000
     b_prime, cg_info = cg(aa_T, b, name="penrose_moore_cg", absdelta=1e-10, maxiter=max_iterations)  # signature:
@@ -69,8 +69,9 @@ def pseudo_inverse(A, A_T, b):
     return xi
 
 
-def find_penrose_moore_solution(pipe,  reload_from_cache=True, filename="pipe2_xi_cache.txt"):
+def find_penrose_moore_solution(itr, pipe,  reload_from_cache=True, filename="pipe2_xi_cache.txt"):
     """
+    :param itr:                     The number of iterations to allow in the CGM.
     :param pipe:                    An instance of the InferenceSchemeRe class containing the data power spectrum
                                     stored as an inferred posterior mean power spectrum.
     :param reload_from_cache:       Whether to reload cached results under a 'pipe2_xi_cache.txt' file.
@@ -99,7 +100,7 @@ def find_penrose_moore_solution(pipe,  reload_from_cache=True, filename="pipe2_x
     A = lambda p: sample_from_ps(p, N, ps_mean, h_inv_trafo)
     A_T = lambda p: sample_from_ps_transpose(p, ps_mean, M, N, h_trafo)
 
-    xi = pseudo_inverse(A=A, A_T=A_T, b=d)
+    xi = pseudo_inverse(itr=itr, A=A, A_T=A_T, b=d)
 
     if reload_from_cache:
 

@@ -89,7 +89,7 @@ def calculate_kl_val_and_grad(
 def get_beneficial_position(key, lh, samples_to_draw=50):
     # :FIXME: Here, I break the convention that jax.random.split should be used as key, subkey = jax.random.split(key)
 
-    print(f"Choosing initial position with lowest KL energy amongst {samples_to_draw} random samples...")
+    print(f"\tChoosing initial position with lowest KL energy amongst {samples_to_draw} random samples...")
 
     kl_val = lambda p: calculate_kl_val_and_grad(likelihood=lh, primals=p)
 

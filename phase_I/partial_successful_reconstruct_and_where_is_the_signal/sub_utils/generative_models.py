@@ -2,8 +2,8 @@ from phase_I.utils.config_jupyter_notebooks import *
 import scipy as sc
 # from phase_I.quickview.partial_successful_reconstruct.data.style_components.matplotlib_style import *
 
-nrt_strain_values = np.loadtxt("data/num_rel_template_strain_values.txt") * 1e19
-nrt_time_values = np.loadtxt("data/num_rel_template_time_values.txt") - zero_time
+nrt_strain_values = np.loadtxt("/Users/iason/PycharmProjects/STRAIN/data/data_txt/num_rel_template_strain_values.txt") * 1e19
+nrt_time_values = np.loadtxt("/Users/iason/PycharmProjects/STRAIN/data/data_txt/num_rel_template_time_values.txt") - zero_time
 
 def generative_model_4(extended_time_domain, extended_time_domain_values):
     """
@@ -382,6 +382,7 @@ def generative_model_continuous_double_power_law(harmonic_space, apply_envelope=
     # ---------
 
     k = harmonic_space.get_unique_k_lengths()
+
     power_at_zm = 1e-32  # The zm should, by assumption, be ~0. Setting it to small value to avoid nan's.
     # --- Prior choices
     prior_choices = {
@@ -392,11 +393,11 @@ def generative_model_continuous_double_power_law(harmonic_space, apply_envelope=
         "c ": (100, 1e-16),  # Gaussian
         # "alpha ": (1,3),  # Gaussian
         # "alpha ": (2,2),  # Lognormal
-        "alpha ": (1, None),  # Exponential
+        "alpha ": (2, None),  # Exponential
         # "alpha ": (0,+20),  # Uniform
         # "beta ": (-4,2),  # Gaussian
         # "beta ": (4,4),  # Lognormal
-        "beta ": (-1, None),  # Exponential
+        "beta ": (-2, None),  # Exponential
         # "beta ": (0,-20),  # Uniform
         "wavelet_fluct ": (4, 2), # Lognormal
         "cfm_envelope_fluctuations ": (4, 2),
@@ -405,6 +406,7 @@ def generative_model_continuous_double_power_law(harmonic_space, apply_envelope=
     # ---------
 
     s_dom = harmonic_space.get_default_codomain()
+    print("s domain: ", s_dom)
     p_space = ift.PowerSpace(harmonic_space)
 
     k[0] = 1  # I do this so np.log10(k) won't diverge at k[0]=0. Later I will set the power at k[0] to a fixed value
@@ -429,13 +431,14 @@ def generative_model_continuous_double_power_law(harmonic_space, apply_envelope=
     wavelet_fluct = ift.LognormalTransform(*prior_choices["wavelet_fluct "], key="wavelet_fluct ", N_copies=0)
 
     if exact_values_dict is not None:
-        [k0_val, p0_val, c_val, alpha_val, beta_val, _, _] = exact_values_dict.values()
+        [k0_val, p0_val, c_val, alpha_val, beta_val, wavelet_fluct_val, _, _] = exact_values_dict.values()
 
         k0 = ift.NormalTransform(key="k0 ", mean=k0_val, sigma=1e-16)
         p0 = ift.NormalTransform(key="p0 ", mean=p0_val, sigma=1e-16)
         c = ift.NormalTransform(key="c ", mean=c_val, sigma=1e-16)
         alpha = ift.NormalTransform(key="alpha ", mean=alpha_val, sigma=1e-16)
         beta = ift.NormalTransform(key="beta ", mean=beta_val, sigma=1e-16)
+        wavelet_fluct = ift.NormalTransform(key="wavelet_fluct ", mean=wavelet_fluct_val, sigma=1e-16)
 
     pspace_expander = ift.ContractionOperator(p_space, spaces=0).adjoint
 
@@ -452,7 +455,7 @@ def generative_model_continuous_double_power_law(harmonic_space, apply_envelope=
 
     k_field_adder = ift.Adder(a=k_field)
     # add_one = ift.Adder(a=ift.Field(dt(p_space), val=np.ones(p_space.shape[0])))
-    exponent = -c*(k_field_adder(-1*k0))
+    exponent = -c*(k_field_adder(-1*k0))  # -c(k-k0)
 
     # C = ClipOperator(domain=exponent.target, clip_above=690, clip_below=-690)  # this value of `clip_above` gives power spectra that
     # deviate from the power spectra without this clipping operator by a maximum of ~10^-300.
@@ -491,6 +494,8 @@ def generative_model_continuous_double_power_law(harmonic_space, apply_envelope=
 
     integrator = ift.ContractionOperator(p_space, spaces=0)
     integral = integrator(ps) # scalar
+
+
     integral = pspace_expander @ integral # field
 
     ps = ps * integral.ptw("reciprocal")
@@ -503,6 +508,7 @@ def generative_model_continuous_double_power_law(harmonic_space, apply_envelope=
     amp_s_on_full_space = pd @ amp_s
 
     xi_s = ift.ducktape(harmonic_space, None,'xi_s')
+
     ht = ift.HartleyOperator(domain=s_dom)
 
     wavelet = ht.adjoint(amp_s_on_full_space * xi_s)
@@ -511,7 +517,7 @@ def generative_model_continuous_double_power_law(harmonic_space, apply_envelope=
         fluctuations = prior_choices["cfm_envelope_fluctuations "]
         llslope = prior_choices["cfm_envelope_loglogavgslope "]
         if exact_values_dict is not None:
-            [_, _, _, _, _, cfm_envelope_fluctuations_val, cfm_envelope_loglogavgslope_val] = exact_values_dict.values()
+            [_, _, _, _, _, _, cfm_envelope_fluctuations_val, cfm_envelope_loglogavgslope_val] = exact_values_dict.values()
             fluctuations = (cfm_envelope_fluctuations_val, 1e-16)
             llslope = (cfm_envelope_loglogavgslope_val, 1e-16)
         cf_env = ift.SimpleCorrelatedField(target=s_dom, fluctuations=fluctuations, loglogavgslope=llslope,

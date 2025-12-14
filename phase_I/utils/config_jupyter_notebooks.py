@@ -1,7 +1,6 @@
 import numpy as np
 import pickle
 
-
 def unpickle_me_this(filename: str, absolute_path=False):
     if absolute_path:
         file = open(filename, 'rb')
@@ -18,6 +17,18 @@ def pickle_me_this(filename: str, data_to_pickle: object):
     file.close()
 
 
+def usual_plot(xl=r"Time $t$ $\mathrm{[sec]}$", yl=r"Strain $h$ $\mathrm{[10^{-19}]}$", title=None, xlim=None, ylim=None):
+    plt.xlabel(xl)
+    plt.ylabel(yl)
+    plt.title(title)
+    ax = plt.gca()
+    labels = ax.get_legend_handles_labels()
+    plt.xlim(xlim)
+    plt.ylim(ylim)
+    if labels != ([], []):
+        plt.legend()
+    plt.show()
+
 # -- Turn on interactive plotting
 # plt.ion()
 
@@ -26,7 +37,7 @@ t0 = 1126259462.4    # -- GW150914
 #-- Choose detector as H1, L1, or V1
 
 detector = 'H1'
-strain = unpickle_me_this("/Users/iason/PycharmProjects/STRAIN/data/data_pickle_or_hdf5/GW150914_strain.pickle", absolute_path=True)
+strain = unpickle_me_this("/Users/iason/PycharmProjects/STRAIN/phase_I/partial_successful_reconstruct_and_where_is_the_signal/store/GW150914_strain.pickle", absolute_path=True)
 data = 1e19 * strain.value
 
 zero_time = 1126259446  # I got this zero time by looking at the caption of the figure produced by strain.plot().
