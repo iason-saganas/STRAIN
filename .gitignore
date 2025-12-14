@@ -18,6 +18,7 @@ phase_II/nifty_re_playground/re_pipe_2
 phase_II/nifty_re_playground/bunch_of_white_noise.pickle
 phase_II/nifty_re_playground/bunch_of_white_noise_smoothed.pickle
 phase_II/nifty_re_playground/wigner_results_from_penrose_xi_without_welch_average.pickle
+phase_II/nifty_re_playground/small_data_set
 
 # Ignore OS files
 .DS_Store
