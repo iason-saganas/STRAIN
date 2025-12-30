@@ -20,6 +20,13 @@ phase_II/nifty_re_playground/bunch_of_white_noise_smoothed.pickle
 phase_II/nifty_re_playground/wigner_results_from_penrose_xi_without_welch_average.pickle
 phase_II/nifty_re_playground/small_data_set
 
+phase_III/sde1
+phase_III/sde2
+phase_III/sde3
+phase_III/sde4
+phase_III/sde5
+phase_III/sde6
+
 # Ignore OS files
 .DS_Store
 

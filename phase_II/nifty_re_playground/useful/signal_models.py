@@ -1,8 +1,14 @@
 from nifty.nifty.re.prior import NormalPrior, LogNormalPrior, UniformPrior
 from nifty.nifty.re.num import uniform_prior
+from nifty.nifty.re.gauss_markov import IntegratedWienerProcess
 import nifty.nifty.re as jft
+
+from scipy.signal.windows import tukey
+
 from functools import partial
+
 import operator
+
 import jax.numpy as jnp
 import jax
 
@@ -80,7 +86,9 @@ class BrokenPowerLaw(jft.Model):
                  k_break: tuple | float = (10, 200), fluctuations: tuple | float = (4, 2),
                  peak_power:tuple | float = 1000., sigmoid_width: tuple | float = 100.,
                  envelope_fluctuations: tuple | float | None = (4, 2),
-                 envelope_loglogavgslope: tuple | float | None = (-4 ,1), model_prefix="s_"):
+                 envelope_loglogavgslope: tuple | float | None = (-4 ,1),
+                 flexibility: tuple | float | None = None,
+                 model_prefix="s_"):
         """
         If parameters are tuples, they should give:
             - mean, std if normal or lognormal
@@ -113,12 +121,13 @@ class BrokenPowerLaw(jft.Model):
         print("\nInitializing signal model with broken power law.")
         self.signal_grid = signal_grid
         parameters = [pl_slope_left, pl_slope_right, k_break, fluctuations, peak_power, sigmoid_width,
-                      envelope_fluctuations, envelope_loglogavgslope]
+                      envelope_fluctuations, envelope_loglogavgslope, flexibility]
         parameter_names = ["pl_slope_left", "pl_slope_right", "k_break", "fluctuations", "peak_power", "sigmoid_width",
-                           "envelope_fluctuations", "envelope_loglogavgslope"]
+                           "envelope_fluctuations", "envelope_loglogavgslope", "flexibility"]
         parameter_names = [f"{model_prefix}{name}" for name in parameter_names]
-        distributions = [ExponentialPrior, ExponentialPrior, UniformPrior, LogNormalPrior, NormalPrior, NormalPrior,
-                         LogNormalPrior, NormalPrior]
+        distributions = [LogNormalPrior, NormalPrior, UniformPrior, LogNormalPrior, NormalPrior, UniformPrior,
+                         LogNormalPrior, NormalPrior, LogNormalPrior]
+
 
         apply_cf_env = True
         if type(envelope_fluctuations) is not tuple or type(envelope_loglogavgslope) is not tuple:
@@ -141,6 +150,9 @@ class BrokenPowerLaw(jft.Model):
         self.h_vol = self.N * self.dk
         self.shp = self.signal_grid.shape
         self.dist = self.signal_grid.distances
+        self.log_vol = self.signal_grid.harmonic_grid.log_volume
+        self.relative_log_mode_lengths = self.signal_grid.harmonic_grid.relative_log_mode_lengths
+        self._deviations = None
 
         self.ps = partial(self._create_power_spectrum, callables_list)
         self.amp = lambda xi: jnp.sqrt(self.ps(xi))
@@ -153,14 +165,22 @@ class BrokenPowerLaw(jft.Model):
 
         self.xi_s = jft.NormalPrior(mean=0, std=1, name=f"{model_prefix}xi",
                                     shape=jft.ShapeWithDtype(shape=self.shp, dtype=jnp.float64),)
+        self.set_deviations(flexibility)
 
         if apply_cf_env:
             self.env = self._create_cf_env(envelope_fluctuations, envelope_loglogavgslope)
-            self.total_dom = self.ps_domain | self.env.domain | self.xi_s.domain
+            if self._deviations is not None:
+                self.total_dom = self.ps_domain | self.env.domain | self.xi_s.domain | self._deviations.domain
+            else:
+                self.total_dom = self.ps_domain | self.env.domain | self.xi_s.domain
         else:
             self.env = None
-            self.total_dom = self.ps_domain | self.xi_s.domain
+            if self._deviations is not None:
+                self.total_dom = self.ps_domain | self.xi_s.domain | self._deviations.domain
+            else:
+                self.total_dom = self.ps_domain | self.xi_s.domain
 
+        self.win = tukey(self.N, alpha=0.3)
 
         super().__init__(domain=self.total_dom, white_init=True)
 
@@ -183,7 +203,7 @@ class BrokenPowerLaw(jft.Model):
 
     def _create_power_spectrum(self, variable_list, p):
         (call_pl_slope_left, call_pl_slope_right, call_k_break, call_fluctuations, call_peak_power, call_sigmoid_width,
-         _, _) = variable_list
+         _, _, _) = variable_list
 
         # TODO: Make the transition linear in log(k_break), not in k_break (sigmoid_width * (k-k_break)) => ... ln(k)/ln(k_break)
 
@@ -212,23 +232,64 @@ class BrokenPowerLaw(jft.Model):
         a_break = peak_power * exp(-pl_slope_left * l_break)
         b_break = peak_power * exp(-pl_slope_right * l_break)
 
-        sigmoid = 1/2 + 1/2*jnp.tanh(sigmoid_width*(k-k_break))
+        # sigmoid = 1/2 + 1/2*jnp.tanh(sigmoid_width*(k-k_break))
+        rel_k = k/k_break
+        sigmoid = 1/2 * (1 + jnp.tanh(sigmoid_width*jnp.log(rel_k)))
         anti_sigmoid = 1 - sigmoid
-        ps = a_break * exp(pl_slope_left * l) * anti_sigmoid + b_break * exp(pl_slope_right * l) * sigmoid
 
-        area = dk * jnp.sum(ps)
+        # ps = a_break * exp(pl_slope_left * l) * anti_sigmoid + b_break * exp(pl_slope_right * l) * sigmoid
+        ps = peak_power * (rel_k**pl_slope_left * anti_sigmoid + rel_k**pl_slope_right * sigmoid)
+
+        if self._deviations is not None:
+            log_iwp_spectrum = self._log_iwp(p)[1:]  # mask 0 value
+            ps = ps * jnp.exp(log_iwp_spectrum)
+
 
         # print("WARNING: >> BrokenPowerLaw model uses improper normalization in the ps right now. Please revert \n by uncommenting this line in the future.")
         # print("WARNING >> Please revert to prepending the zm AFTER integrating")
         # print("WARNING >> Please replace 0-mode with 1e-10 instead of 1e-32.")
+        # ps = ps / jnp.sum(ps) # to match nifty8 fw model
 
+        area = dk * jnp.sum(ps)
         ps = ps / area * fluctuations**2
 
-        # ps = ps / jnp.sum(ps) # to match nifty8 fw model
 
 
         ps = jnp.concatenate([jnp.array([zm]), ps])  # prepend the zero-mode
         return ps
+
+
+    def _log_iwp(self, primals):
+
+        twolog = self._deviations(primals)
+
+        twolog = jnp.concatenate((jnp.zeros((1,)), twolog[:, 0]))
+        detrended_log_iwp = self._remove_slope(self.relative_log_mode_lengths, twolog)
+
+        return detrended_log_iwp
+
+
+    def _remove_slope(self, rel_log_mode_dist, x):
+        sc = rel_log_mode_dist / rel_log_mode_dist[-1]
+        return x - x[-1] * sc
+
+
+    def set_deviations(self, flex):
+        if flex is not None:
+            if not isinstance(flex, tuple):
+                flex = LogNormalPrior(flex, 1e-16, name=f"{self.model_prefix}flexibility",)
+            else:
+                flex = LogNormalPrior(*flex, name=f"{self.model_prefix}flexibility",)
+
+            self._deviations = IntegratedWienerProcess(
+                jnp.zeros((2,)),
+                flex,
+                self.log_vol,
+                name=self.model_prefix + "spectrum",
+                asperity=1e-16,
+                hack_make_pos_definite=False,
+            )
+
 
 
     def _create_cf_env(self, fluct, llslope):
@@ -248,37 +309,37 @@ class BrokenPowerLaw(jft.Model):
         return s_env
 
 
+    def __call__(self, p):
+        xi_s_real = self.xi_s(p)
+        fourier_xi_s = fw_hartley(xi_s_real, norm="ortho")
+
+        amplitude_realization = self.amp(p)[self.expander]
+        kernel = amplitude_realization * jnp.sqrt(self.h_vol) * fourier_xi_s
+
+        wavelet = bw_hartley(kernel, norm="ortho")
+
+        if self.env is not None:
+            env_realization = self.env(p)
+            wavelet = env_realization * wavelet
+        return wavelet * self.win
+
     # def __call__(self, p):
-    #     xi_s_real = self.xi_s(p)
-    #     fourier_xi_s = fw_hartley(xi_s_real, norm="ortho")
+    #     # call to precisely match nifty8 implementation
+    #     xi_s = self.xi_s(p)
+    #
+    #     # fourier_xi_s = fw_hartley(xi_s_real, norm="ortho")  # also I think that fw_hartley(xi) is just another
+    #     # xi the way I coded fw_hartley, so skip unnecessary computation in the future
     #
     #     amplitude_realization = self.amp(p)[self.expander]
-    #     kernel = amplitude_realization * jnp.sqrt(self.h_vol) * fourier_xi_s
+    #     kernel = amplitude_realization * xi_s
     #
-    #     wavelet = bw_hartley(kernel, norm="ortho")
+    #     # wavelet = bw_hartley(kernel, "ortho") * self.h_vol
+    #     wavelet = cfm_hartley(kernel) * self.dk  # to match cfm convention
     #
     #     if self.env is not None:
     #         env_realization = self.env(p)
     #         wavelet = env_realization * wavelet
     #     return wavelet
-
-    def __call__(self, p):
-        # call to precisely match nifty8 implementation
-        xi_s = self.xi_s(p)
-
-        # fourier_xi_s = fw_hartley(xi_s_real, norm="ortho")  # also I think that fw_hartley(xi) is just another
-        # xi the way I coded fw_hartley, so skip unnecessary computation in the future
-
-        amplitude_realization = self.amp(p)[self.expander]
-        kernel = amplitude_realization * xi_s
-
-        # wavelet = bw_hartley(kernel, "ortho") * self.h_vol
-        wavelet = cfm_hartley(kernel) * self.dk  # to match cfm convention
-
-        if self.env is not None:
-            env_realization = self.env(p)
-            wavelet = env_realization * wavelet
-        return wavelet
 
 
     def get_model_components(self):

@@ -44,7 +44,7 @@ def pickle_me_this(filename: str, data_to_pickle: object):
 
 
 def usual_plot(xl=r"Time $t$ $\mathrm{[sec]}$", yl=r"Strain $h$ $\mathrm{[10^{-19}]}$", title=None, xlim=None, ylim=None,
-               show=True, close=False, save_fig=False):
+               show=True, close=False, save_fig=False, save_path=""):
     plt.xlabel(xl, fontsize=20)
     plt.ylabel(yl, fontsize=20)
     plt.title(title, fontsize=25)
@@ -54,10 +54,18 @@ def usual_plot(xl=r"Time $t$ $\mathrm{[sec]}$", yl=r"Strain $h$ $\mathrm{[10^{-1
     plt.ylim(ylim)
     if labels != ([], []):
         plt.legend()
+    if save_path != "":
+        plt.tight_layout()
+        current_date = datetime.datetime.now()
+        plt.savefig(f"{save_path}_{current_date}.png")
     if save_fig:
         plt.tight_layout()
         current_date = datetime.datetime.now()
-        plt.savefig(f"{current_date}.png")
+        if save_path=="":
+            plt.savefig(f"{current_date}.png")
+        else:
+            plt.savefig(f"{save_path}_{current_date}.png")
+
     if show:
         plt.show()
     if close:
@@ -237,7 +245,9 @@ class InferenceSchemeRe():
 
         Models should be defined over the extended domain.
 
-        :param custom_signal_model:  A tuple of s_model, amplitude_op, parameter_choices, model_prefix.
+        Implement a .get_model_components() method that returns the tuples listed down below.
+
+        :param custom_signal_model:  A jft.Model representing the signal.
         :return:
         """
 
@@ -255,7 +265,8 @@ class InferenceSchemeRe():
 
     def add_cfm_signal_model(self, fluct:tuple, llslope:tuple, flex:tuple | None = None, asper:tuple | None=None,
                              offset_mean:float = 0, offset_std:tuple = (1e-16, 1e-16), model_prefix="s_",
-                             add_power_spectrum_template=None, add_custom_power_op=(None,), square_iwp=False,):
+                             add_power_spectrum_template=None, add_custom_power_op=(None,), square_iwp=False,
+                             add_cfm_env=False):
         """
 
         :param fluct:
@@ -291,22 +302,47 @@ class InferenceSchemeRe():
         }
 
 
-        gaussian_win = False
-        if gaussian_win:
-            s_model_cfm = cfm_maker.finalize()
-            dom = s_model_cfm.domain
+        # gaussian_win = False
+        # if gaussian_win:
+        #     s_model_cfm = cfm_maker.finalize()
+        #     dom = s_model_cfm.domain
+        #
+        #     x = self.t_ss
+        #     std_dev = .1
+        #     mean = 16.4
+        #     gaussian = (1 / (std_dev * np.sqrt(2 * np.pi))) * np.exp(-0.5 * ((x - mean) / std_dev) ** 2)
+        #
+        #     s_model = lambda p: s_model_cfm(p)*gaussian
+        #     s_model.domain = dom
+        #
+        #     raise_warning("Using fix gaussian window signal model!! Add instead a generative gaussian envelope or similar")
+        if add_cfm_env:
+            env_fluct = (1,1)
+            env_llslope = (-4,2)
 
-            x = self.t_ss
-            std_dev = .1
-            mean = 16.4
-            gaussian = (1 / (std_dev * np.sqrt(2 * np.pi))) * np.exp(-0.5 * ((x - mean) / std_dev) ** 2)
+            env_maker = jft.CorrelatedFieldMaker(prefix=model_prefix+"env_")
+            env_maker.set_amplitude_total_offset(1e-16, (1e-16, 1e-16))
+            env_maker.add_fluctuations(shape=(self.n_ss,), distances=self.dist_ss, fluctuations=env_fluct,
+                                       loglogavgslope=env_llslope, flexibility=None, asperity=None,
+                                       harmonic_type="fourier",
+                                       non_parametric_kind="power",
+                                       hack_add_power_spectrum_template=None,
+                                       hack_custom_amplitude_operators=None,
+                                       hack_make_iwp_pos_definite=False)
 
-            s_model = lambda p: s_model_cfm(p)*gaussian
-            s_model.domain = dom
+            s_wavelet = cfm_maker.finalize()
+            log_s_env = env_maker.finalize()
+            s_env = lambda p: jnp.exp(log_s_env(p))
+            s_model = lambda p: s_wavelet(p) * s_env(p) * tukey(self.n_ds, alpha=0.3)
 
-            raise_warning("Using fix gaussian window signal model!! Add instead a generative gaussian envelope or similar")
+            s_model.domain = s_wavelet.domain | log_s_env.domain
+
         else:
-            s_model = cfm_maker.finalize()
+            s_model_fin = cfm_maker.finalize()
+            s_model = lambda p: s_model_fin(p) * tukey(self.n_ss, alpha=0.3)
+            s_model.domain = s_model_fin.domain
+
+
 
 
         self.s_model = s_model
@@ -315,24 +351,86 @@ class InferenceSchemeRe():
         self.model_prefix = model_prefix
 
 
+    def add_matern_signal_model(self, scale:tuple, llslope:tuple, cutoff: tuple,
+                             offset_mean:float = 0, offset_std:tuple = (1e-16, 1e-16), model_prefix="s_",
+                                add_cfm_env=False):
+        """
+
+        :param llslope:
+        :param offset_mean:
+        :param offset_std:
+        :param model_prefix:
+
+        :return:
+        """
+
+        cfm_maker = jft.CorrelatedFieldMaker(prefix=model_prefix)
+        cfm_maker.set_amplitude_total_offset(offset_mean, offset_std)
+        cfm_maker.add_fluctuations_matern(shape=(self.n_ss,), distances=self.dist_ss, scale=scale,
+                                   loglogslope=llslope, cutoff=cutoff, renormalize_amplitude=True, harmonic_type="fourier",
+                                   non_parametric_kind="power")
+
+        # parameter_choices = {
+        #     f"{model_prefix}fluctuations": lambda xi: np.exp(fluct[0] + xi*fluct[1]),
+        #     f"{model_prefix}loglogavgslope": lambda xi: llslope[0] + xi*llslope[1],
+        #     f"{model_prefix}flexibility": lambda xi: np.exp(flex[0] + xi*flex[1]),
+        #     f"{model_prefix}asperity": lambda xi: np.exp(asper[0] + xi*asper[1]),
+        #     #"offset_mean": (offset_mean, "fix"),
+        #     #"offset_std": (offset_std, "lognormal"),
+        # }
+        parameter_choices = {}
+
+        if add_cfm_env:
+            env_fluct = (1, 1)
+            env_llslope = (-4, 2)
+
+            env_maker = jft.CorrelatedFieldMaker(prefix=model_prefix + "env_")
+            env_maker.set_amplitude_total_offset(1e-16, (1e-16, 1e-16))
+            env_maker.add_fluctuations(shape=(self.n_ss,), distances=self.dist_ss, fluctuations=env_fluct,
+                                       loglogavgslope=env_llslope, flexibility=None, asperity=None,
+                                       harmonic_type="fourier",
+                                       non_parametric_kind="power",
+                                       hack_add_power_spectrum_template=None,
+                                       hack_custom_amplitude_operators=None,
+                                       hack_make_iwp_pos_definite=False)
+
+            s_wavelet = cfm_maker.finalize()
+            log_s_env = env_maker.finalize()
+            s_env = lambda p: jnp.exp(log_s_env(p))
+            s_model = lambda p: s_wavelet(p) * s_env(p) * tukey(self.n_ds, alpha=0.3)
+
+            s_model.domain = s_wavelet.domain | log_s_env.domain
+
+        else:
+            s_model_fin = cfm_maker.finalize()
+            s_model = lambda p: s_model_fin(p) * tukey(self.n_ss, alpha=0.3)
+            s_model.domain = s_model_fin.domain
+
+        self.s_model = s_model
+        self.amplitude_op = cfm_maker.amplitude
+        self.parameter_choices = parameter_choices
+        self.model_prefix = model_prefix
+
+
     def signal_response(self):
-        if self.r_fac != 1:
-            raise ValueError("Non-Unit responses (masks) not implemented yet.")
+        if self.r_fac != 1 and self.r_fac != 2:
+            raise ValueError("Non-Unit responses (masks) except for res_fac == 2 not implemented yet.")
         if self.s_model is None:
             raise ValueError("No signal model implemented yet, call 'add_cfm_signal_model' or add_custom_signal_model.")
 
         class Response(jft.Model):
-            def __init__(self, signal_model, zp_adj, ext_fac):
+            def __init__(self, signal_model, zp_adj, ext_fac, res_fac):
                 self.sm = signal_model
                 self.zp_adj = zp_adj
                 self.ext_fac = ext_fac
+                self.res_fac = res_fac
                 super().__init__(domain=signal_model.domain)
 
             def __call__(self, xi):
                 model_values_on_long_domain = self.sm(xi)
-                return self.zp_adj(model_values_on_long_domain, self.ext_fac)
+                return self.zp_adj(model_values_on_long_domain, self.ext_fac)[::self.res_fac]
 
-        s_prime = Response(signal_model=self.s_model, zp_adj=self.adjoint_zp, ext_fac=self.e_fac)
+        s_prime = Response(signal_model=self.s_model, zp_adj=self.adjoint_zp, ext_fac=self.e_fac, res_fac=self.r_fac)
 
         return s_prime
 
@@ -423,7 +521,7 @@ class InferenceSchemeRe():
             kl_energy, kl_iter = kl_loose
 
         draw_linear_kwargs = dict(
-            cg_name="CG: linear sampling.",
+            cg_name="CG, linear sampling",
             cg_kwargs=dict(absdelta=linear_energy, maxiter=linear_iter),
         )
 
@@ -432,7 +530,10 @@ class InferenceSchemeRe():
             minimize_kwargs=dict(
                 name="Nonlinear sampling NCG",
                 absdelta=nonlinear_energy,
-                cg_kwargs=dict(name="\tCG: nonlinear sampling.",),
+                xtol=1e-10,  #  so for geoVI, it looks like xtol and absdelta are xOr thresholds, which is I think
+                # not the behaviour of kl_kwargs... so I supply a small xtol here in order to just use the
+                # energy threshold
+                cg_kwargs=dict(name="\tCG, nonlinear sampling",),
                 maxiter=nonlinear_iter,
             )
         )
@@ -463,7 +564,7 @@ class InferenceSchemeRe():
         return lh
 
     def run_inference(self, kl_iterations=10, n_samples=kl_sampling_rate, use_strict_minimizers=False, out_name="out",
-                     resume=True, choose_low_kl_starting_pos=False, geoVi=True):
+                     resume=True, choose_low_kl_starting_pos=False, geoVi=True, **kwargs):
         """
 
         :param kl_iterations:
@@ -473,7 +574,8 @@ class InferenceSchemeRe():
         :param resume:
         :param choose_low_kl_starting_pos:  If self.init_pos was not set explicitly, tries to find a minimum kl starting
                                             position.
-        :param geoVi:
+        :param geoVi:                       If true, use non-linear resampling mode.
+        :param kwargs:                      Kwargs to be passed to optimize_kl.
         :return:
         """
         lh = self.build_lh()
@@ -484,6 +586,8 @@ class InferenceSchemeRe():
         if self.plotting_callback is not None:
             plotting_callback = lambda samples, vi_state: (
                 self.plotting_callback(out_name, kl_iterations, lh, samples, vi_state))
+        else:
+            plotting_callback = None
 
         self.key, key_sampler, key_i = jax.random.split(self.key, 3)
 
@@ -505,7 +609,7 @@ class InferenceSchemeRe():
 
         starting_time = time()
 
-        samples, _ = jft.optimize_kl(
+        samples, other_stuff = jft.optimize_kl(
             likelihood=lh,
             position_or_samples=initial_position,
             key=key_sampler,
@@ -517,8 +621,8 @@ class InferenceSchemeRe():
             sample_mode=sample_mode,
             resume=resume,
             odir=out_name,
-            callback=plotting_callback
-
+            callback=plotting_callback,
+            **kwargs,
         )
 
         ending_time = time()
@@ -532,7 +636,8 @@ class InferenceSchemeRe():
 
         self.posterior_xi_samples = samples
         print("\nSaved posterior latent samples as self.posterior_xi_samples. Finished execution in ", *duration)
-        return samples
+        print("Please ensure to run get_current_key().")
+        return samples, other_stuff
 
 
     def get_current_key(self):
@@ -800,8 +905,8 @@ class InferenceSchemeRe():
         plt.show()
 
 
-    def plot_posterior_signal(self, print_posterior_parameters=False, over_full_signal_space=False, plot_nrt=False, **kwargs):
-        print(": print_posterior_parameters , ", print_posterior_parameters)
+    def plot_posterior_signal(self, print_posterior_parameters=False, over_full_signal_space=False, plot_nrt=False,
+                              plot_data=True, **kwargs):
         _, signal_mean_std_ss, _ = (
             self.get_posterior_statistics(print_posterior_parameters))
 
@@ -822,10 +927,18 @@ class InferenceSchemeRe():
             signal_std = signal_mean_std_ss[1]
             time = self.t_ss
 
+        # shaded 1-sigma region
+        plt.fill_between(time,
+                         signal_mean - signal_std,
+                         signal_mean + signal_std,
+                         color=light_blue,
+                         alpha=0.7)  # transparency
 
-        plt.errorbar(time, signal_mean, yerr=signal_std, label=r"Reconstructed signal (with $1\sigma$ contour)",
-                     ecolor=light_blue, color=blue)
-        plt.plot(self.t_ds, self.d, label="Data", color="orange")
+        # plot the mean line on top
+        plt.plot(time, signal_mean, color=blue, label=r"Reconstructed signal", lw=2)
+
+        if plot_data:
+            plt.plot(self.t_ds, self.d, label="Data", color="orange")
 
         if plot_nrt:
             nrt_strain_values = np.loadtxt("/Users/iason/PycharmProjects/STRAIN/data/data_txt/num_rel_template_strain_values.txt") * 1e19
@@ -834,7 +947,7 @@ class InferenceSchemeRe():
 
             go_until = np.max(np.where(nrt_time_values<max(self.t_ds)))
 
-            plt.plot(nrt_time_values[:go_until], nrt_strain_values[:go_until], label="Numerical relativity template (matched filter)",
+            plt.plot(nrt_time_values[:go_until], nrt_strain_values[:go_until], label="LIGO Template",
                      color=red)
 
         usual_plot(**kwargs)
@@ -1078,7 +1191,7 @@ def interpolate_waveform_from_inverted_wigner(new_times):
     new_values = interpolator(new_grid)
 
     dt = new_times[1] - new_times[0]
-    shift = int((0.1+0.136) /dt)  # please don't use this roll
+    shift = int((0.136-0.25) /dt)  # please don't use this roll
     new_values = np.roll(new_values, -shift)
 
     # plt.plot(waveform_times, waveform, label="old")
@@ -1649,6 +1762,8 @@ def get_peaks_from_cache(only_positives = True, sigma_thresh=2, custom_norm=1, p
 
 def analyze_kl_callback(out_name, max_kl_iterations, lh, samples, vi_state):
 
+    ### KL ENERGY CALCULATION
+
     p = out_name+"/custom_callback/"  # prefix
     os.makedirs(p, exist_ok=True)  # create folder if it doesn't exist
     kl_energy_file = p + "kl_energies.txt"
@@ -1672,6 +1787,54 @@ def analyze_kl_callback(out_name, max_kl_iterations, lh, samples, vi_state):
     # for sl in samples:
     #     kl_val = calculate_kl_val_and_grad(likelihood=lh, primals=sl, full_output=False)
     #     print("kl_val:", kl_val)
+
+    ### REDUCED CHI2 CALCULATION
+
+    red_chi2_file = p + "red_chi2.txt"
+
+    gs = lh.likelihood
+    d = gs.data
+    N_inv = gs.noise_cov_inv
+    fw_model = lh.forward
+    d_th_samples = jnp.array([fw_model(xi) for xi in samples])
+    d_th_mean = jnp.mean(d_th_samples, axis=0)
+    res = d_th_mean - d
+    chi2 = res.T @ N_inv(res)
+    red_chi2 = chi2 / len(d)
+
+    with open(red_chi2_file, "a") as f:
+        f.write(str(red_chi2))
+        f.write("\n")
+        f.close()
+
+    if kl_iteration_number == max_kl_iterations:
+        # load kl_energy_file data and plot and save in low quality in folder
+        red_chi_squared = np.loadtxt(red_chi2_file)
+        plt.plot(red_chi_squared)
+        usual_plot(xl="KL Iteration", yl=r"$\chi^2$", title=r"Evolution of reduced $\chi^2$", show=False, close=False)
+        plt.savefig(p+"red_chi2.png", dpi=100)
+        plt.close()
+
+
+    ### FW MODEL CALCULATION
+
+    fw_model_folder = p + "/fw_model/"
+    os.makedirs(fw_model_folder, exist_ok=True)
+
+    plt.plot(d_th_mean)
+    usual_plot(xl="Index", yl="Value", title="Mean forward model evaluation", show=False, close=False)
+    plt.savefig(fw_model_folder+f"iter_{kl_iteration_number}.png", dpi=100)
+    plt.close()
+
+    ### MEAN LATENT VARIABLE CALCULATION
+
+    posterior_mean = jft.mean(samples)
+    latent_posterior_mean_folder = p+"latent_posterior_means/"
+    os.makedirs(latent_posterior_mean_folder, exist_ok=True)
+    pickle_me_this(f"{latent_posterior_mean_folder}{kl_iteration_number}", posterior_mean)
+
+
+
 
 
 class InvNoiseCovFromPs():
@@ -1827,7 +1990,7 @@ class InvNoiseCovFromPs():
 
 
 class NoiseCovarianceFromPs():
-    def __init__(self, one_sided_noise_ps:jnp.array, data_grid, callable_to_apply=None, silly_number=1):
+    def __init__(self, one_sided_noise_ps:jnp.array, data_grid, callable_to_apply=None,):
         r"""
         Please see deprecated class `InvNoiseCovFromPs` as well.
         The call method of this class implements
@@ -1842,14 +2005,15 @@ class NoiseCovarianceFromPs():
                                       space. For example, lambda x: x**-1 for an inverse power spectrum.
         """
 
-        self.one_sided_noise_ps = one_sided_noise_ps
+        self.one_sided_noise_ps = one_sided_noise_ps / 3.6142705042 # needed to the correct data variance...
+        # :ToDo: Recalibrate welch average with my hartley transforms, seems to be wrong right now by this factor.
         self.apply_callable = callable_to_apply
         self.h_grid = data_grid.harmonic_grid
         self.k = self.h_grid.mode_lengths
         self.N = data_grid.shape[0]
 
         self.M_k_lengths = len(self.h_grid.relative_log_mode_lengths)
-        self.M = len(one_sided_noise_ps)
+        self.M = len(self.one_sided_noise_ps)
         self.dk = self.k[1]-self.k[0]
 
         self.expand =  self.h_grid.power_distributor # [0 1 2 ... 3 2 1], therefore,
@@ -1861,12 +2025,10 @@ class NoiseCovarianceFromPs():
         # throw an assertion error
 
         self.h_vol = self.N * self.dk
-        self.full_noise_ps = one_sided_noise_ps[self.expand]
+        self.full_noise_ps = self.one_sided_noise_ps[self.expand]
 
         self.uH = lambda p: fw_hartley(p, norm="ortho")
         self.iuH = lambda p: bw_hartley(p, norm="ortho")
-
-        self.silly_number = silly_number
 
         expected_var = np.sum(self.full_noise_ps * self.dk)
         print("Initiating noise covariance. σ^2 = ∫ ps(k) dk = ", expected_var,
@@ -1875,7 +2037,7 @@ class NoiseCovarianceFromPs():
     def __call__(self, p):
         fourier_input = self.uH(p)  # An i.i.d. variable in standard DFT order [0, +1, +2, ..., +N/2, -N/2+1, ..., -1.]
         kernel = self.apply_callable(self.full_noise_ps * self.h_vol)
-        return self.iuH(kernel * fourier_input) * self.silly_number
+        return self.iuH(kernel * fourier_input)
 
 
 
@@ -1928,3 +2090,106 @@ def plot_histogram(key, mean: float, sigma: float, n_samples: int, mode="Lognorm
              histtype='step', facecolor='white', color="black")
 
     plt.show()
+
+
+from gwpy.timeseries import TimeSeries
+from gwosc.datasets import event_gps
+from gwosc.locate import get_event_urls
+import requests
+
+def unpack_centered(strain_series, gps_time, duration=32, center_at=None):
+    times_gps = np.array(strain_series.times)
+    strain = np.array(strain_series.value)
+
+    center_gps = gps_time if center_at is None else center_at
+    half = duration / 2
+
+    start = center_gps - half
+    end = center_gps + half
+
+    mask = (times_gps >= start) & (times_gps <= end)
+
+    # convert to seconds starting at (center_gps - half)
+    masked_times_gps = times_gps[mask]
+    times_sec = convert_gps_to_seconds(masked_times_gps, t0=start)
+
+    strain_sec = jnp.array(strain[mask] * 1e19)
+    times_sec = jnp.array(times_sec)
+
+    return times_sec, strain_sec, start
+
+
+
+def convert_gps_to_seconds(gps_times, t0=None):
+    gps_times = np.asarray(gps_times)
+    if t0 is None:
+        t0 = gps_times[0]
+    return gps_times - t0
+
+
+def get_strain_data(gw_name = 'GW150914', detector = 'H1', duration = 32, unpack=True, center_at=None,
+                    absolute_path=None, **kwargs):
+    """
+    Sebastian Gil's function, modified.
+
+    This function takes the name of a confirmed gravitational
+    wave transient and obtains the GPS time most closely matching
+    the event. It then checks whether there exists a local copy of
+    the published strain data corresponding to the event. If the data
+    is not available, it downloads it before writing it out into a file.
+    Following that, it turns the file into a timeseries object.
+
+    This is fixed to the Hanford detector for now. Latter versions should
+    account for Livingston and Virgo data as well.
+
+    The dataset being downloaded is 32s long at a
+    sampling rate of 4096 Hz.
+
+    :param unpack: bool,    If true, return define t0 as 0 and return new times and strain scaled by 1e19.
+    :param kwargs:          Keyword arguments to be passed to get_event_urls.
+
+    """
+    gps_time = center_at
+    if absolute_path is None:
+        # Fetch GPS time for the event
+        gps_time = event_gps(gw_name)
+        print("Fetching: ", gw_name)
+        # Fetch event name from catalog
+        url = get_event_urls('GW150914', detector='H1', format='hdf5', **kwargs)
+        print(f"\tNo. of found urls: {len(url)}. Pinging urls[0]. List of all urls:\n\t", *url)
+        url = url[0]
+        # Choose a name for the file
+        file_name = os.path.basename(url)
+        # Check if the data has already been downloaded
+        file_path = f'/Users/iason/PycharmProjects/STRAIN/data/data_pickle_or_hdf5/gwpy_objects/{file_name}'
+        if os.path.exists(file_path):
+            print('The requested dataset exists locally.')
+            strain_file = file_path
+        else:
+            print('The requested dataset does not exist locally. Downloading data for {}.'.format(file_name))
+            with open(file_path,'wb') as strain_file:
+                strain_data = requests.get(url)
+                strain_file.write(strain_data.content)
+        strain_series = TimeSeries.read(file_path, format='hdf5.gwosc')
+    strain_series = TimeSeries.read(absolute_path, format='hdf5.gwosc')
+    if not unpack:
+        return strain_series
+    print("hey=? ")
+    return unpack_centered(strain_series, gps_time, duration=32, center_at=center_at)
+
+
+def solve_data_equation_for_xi(data, ps):
+    r"""
+    Calculates:
+
+        xi = F(data)/sqrt{ps},
+
+    which comes from the data model equation d = F^{-1} \sqrt{ps} xi. Uses jnp.fft.
+
+    :param data:
+    :param ps:
+    :return:    Found harmonic xi that can be input into the Wigner function.
+    """
+    data_tilde = jnp.fft.fft(data)
+    amp = jnp.sqrt(ps)
+    return data_tilde / amp

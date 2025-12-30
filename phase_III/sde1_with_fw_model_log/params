@@ -1,0 +1,131 @@
+# time domain 1x as resolved as data domain
+# Used RK4!
+# For some reaon gives different results than sde1 :)
+
+import numpy as np
+from scipy.stats import chisquare
+
+from phase_II.nifty_re_playground.useful.helpers import *
+from phase_III.useful.diff_equ_solver import *
+from phase_III.useful.helpers import *
+jax.config.update("jax_enable_x64", True)
+key = jax.random.PRNGKey(34)
+
+path1 = "/Users/iason/PycharmProjects/STRAIN/data/data_txt/num_rel_template_strain_values.txt"
+path2 = "/Users/iason/PycharmProjects/STRAIN/data/data_txt/num_rel_template_time_values.txt"
+gw_waveform = np.loadtxt(path1)
+gw_waveform /= max(gw_waveform)
+gw_times = np.loadtxt(path2)
+gw_times = gw_times-gw_times[0]
+sub_idcs = np.where((1.25 < gw_times) & (gw_times < 1.45))
+gw_times = gw_times[sub_idcs]
+gw_waveform = gw_waveform[sub_idcs]
+
+noise_fac = 1e-2
+noise_lvl = noise_fac * jnp.max(gw_waveform)
+grount_truth_noise = noise_lvl * np.random.standard_normal(len(gw_times))
+print("using a noise level of ", noise_lvl)
+
+data = gw_waveform + grount_truth_noise
+
+
+def stochastic_differential_equation(t, y, args):
+    """
+    Call (t,y args) where args = (omega_interpol, gamma_interpol, xi_interpol).
+
+    :param t:                               The current/next time step to solve for.
+    :param y:                               The current state vector (waveform and its derivative).
+    :return:
+    """
+    h, u = y
+    omega_interpol, gamma_interpol, xi_interpol = args
+    omega_i, gamma_i, xi_i = (f.evaluate(t) for f in (omega_interpol, gamma_interpol, xi_interpol))
+
+    dh_dt = u
+    du_dt = xi_i - gamma_i * u - omega_i**2 * h
+    return jnp.array([dh_dt, du_dt])
+
+r_fac = 1
+gw_dt = gw_times[1]-gw_times[0]
+cfm_dt = gw_dt/r_fac
+cfm_times  = np.arange(len(gw_times)*r_fac) * cfm_dt + gw_times.min()
+
+# Very nice prior => Sde 1 folder and short gw waveform. Sde 2 folder contains long gravitational waveform with this
+# parameters
+# key = jax.random.PRNGKey(34)
+# omega_cfm, gamma_cfm, xi_cfm = [create_cfm(time_domain=cfm_times, prefix=p, offset_std=ofs_std, offset_mean=ofs_m, fluct=flu, llslope=ll, flex=fle) for
+#                                 p,              ofs_std,        ofs_m,      flu,        ll,             fle in [
+#                                 ("omega_cfm_",  (100,1e-16),    100,        (100,100),  (-4, 1e-16),    None),  # idk just 100 and then everything in the same o.o.m.
+#                                 ("gamma_cfm_",  (50,1e-16),     50,         (50,50),  (-4, 1e-16),    None),  # bias gamma to do its job: Damp => positive mean and underdamp so 50 = gamma < 2 omega
+#         # everything else in the same order of magnitude
+#                                 ("xi_cfm_",     (50,1e-16),     0,         (50,50),  (-4, 1e-16),    None),  # xi and gamma on equal footing. although sign of xi is ambiguous and depends on local
+#         # properties => set 0.
+#                                 ]
+#                                 ]
+# scaling_constant = (1e3, 1e3)
+
+omega_cfm, gamma_cfm, xi_cfm = [create_cfm(time_domain=cfm_times, prefix=p, offset_std=ofs_std, offset_mean=ofs_m, fluct=flu, llslope=ll, flex=fle) for
+                                p,              ofs_std,        ofs_m,      flu,        ll,             fle in [
+                                ("omega_cfm_",  (1e-16,1e-16),    100,        (100,100),  (-4, 1e-16),    None),  # idk just 100 and then everything in the same o.o.m.
+                                ("gamma_cfm_",  (1e-16,1e-16),     50,         (50,50),  (-4, 1e-16),   None),  # bias gamma to do its job: Damp => positive mean and underdamp so 50 = gamma < 2 omega
+        # everything else in the same order of magnitude
+                                ("xi_cfm_",     (50,1e-16),     0,         (50,50),  (-2, 1),    (1,1)),  # xi and gamma on equal footing. although sign of xi is ambiguous and depends on local
+        # properties => set 0.
+                                ]
+                                ]
+scaling_constant = (1e3, 1e3)
+
+# log_envelope = create_cfm(time_domain=cfm_times, prefix="cfm_env_", offset_std=(1e-16,1e-16), offset_mean=0,fluct=(1,1), llslope=(-4,1e-16), flex=None)
+# envelope = lambda p: jnp.exp(log_envelope(p))
+# envelope.domain = log_envelope.domain
+
+generative_wavelet = AutoDiffEquationSolver(
+    prefix="stochastic_diff_equ_",
+    reconstruction_times=gw_times,
+    cfm_sampling_times=cfm_times,
+    omega_cfm=omega_cfm,
+    gamma_cfm=gamma_cfm,
+    xi_cfm=xi_cfm,
+    scaling_constant=scaling_constant
+)
+
+mask = DomainCheckAndMask(domain_time=cfm_times, target_time=gw_times)
+s_prime = lambda p: mask(generative_wavelet(p))
+s_prime.domain = generative_wavelet.domain
+s_prime.get_model_components = generative_wavelet.get_model_components
+
+
+# for _ in range(10):
+sample_waveform, key = draw_and_plot_field_realizations(times=gw_times, diff_eq_solver_model=generative_wavelet,
+                                                            omega_op=omega_cfm, gamma_op=gamma_cfm, xi_op=xi_cfm,
+                                                            key=key)
+
+plt.plot(gw_times, data, label="Numerical relativity template synth data")
+plt.plot(gw_times, sample_waveform, label="Fw model evaluation")
+usual_plot()
+
+inference = InferenceSchemeRe(t=gw_times, d=data, key=key, e_fac=1, r_fac=1, plotting_callback=analyze_kl_callback)
+inference.add_noise_op(noise_var_level=noise_lvl)
+inference.add_custom_signal_model(custom_signal_model=s_prime)
+
+latent_samples, other_stuff = inference.run_inference(kl_iterations=20, n_samples=15, use_strict_minimizers=True,
+                                                      out_name="test_sde", resume=True, choose_low_kl_starting_pos=False, geoVi=True)
+
+signal_samples = [generative_wavelet(xi) for xi in latent_samples]
+s_prime_samples = [s_prime(xi) for xi in latent_samples]
+signal_mean, signal_std = jft.mean_and_std(signal_samples)
+s_prime_mean, s_prime_std = jft.mean_and_std(s_prime_samples)
+
+def chi2(data, model, sigma):
+    return np.sum(((data - model) / sigma)**2)
+
+print(chi2(data, s_prime_mean, noise_lvl)/len(data))
+print(chi2(data, s_prime_mean, s_prime_std)/len(data))
+
+plt.errorbar(cfm_times, signal_mean, yerr=signal_std,label="SDE model", ecolor="lightblue")
+plt.plot(gw_times, data, ".-", markersize=4, color="orange", label="Synthetic data")
+plt.plot(gw_times, s_prime_mean, "--", color="red", label="Predicted data")
+usual_plot()
+
+key = plot_posterior(key, times=cfm_times, operator_list=[omega_cfm, gamma_cfm, xi_cfm, generative_wavelet], latent_samples=latent_samples,
+                     label_list=["omega", "gamma res", "xi", "waveform"])

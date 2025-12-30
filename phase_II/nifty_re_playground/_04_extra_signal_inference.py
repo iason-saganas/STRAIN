@@ -26,7 +26,7 @@ strain = signal_strip_strain * tukey(len(signal_strip_strain))
 time = signal_strip_time
 print("data length: ", len(strain), " time length: ", len(time))
 
-pipe_3 = InferenceSchemeRe(t=time, d=strain, e_fac=2, r_fac=1, key=key, plotting_callback=analyze_kl_callback)
+pipe_3 = InferenceSchemeRe(t=time, d=strain, e_fac=1, r_fac=1, key=key, plotting_callback=analyze_kl_callback)
 
 # 2. Build correlated field for signal model
 # pipe_3.add_cfm_signal_model(fluct=(5, 2), llslope=(-2, 2), #flex=(1, 1)
@@ -34,25 +34,29 @@ pipe_3 = InferenceSchemeRe(t=time, d=strain, e_fac=2, r_fac=1, key=key, plotting
 
 pipe_3.add_custom_signal_model(BrokenPowerLaw(
     signal_grid=pipe_3.s_dom_real,
-    # pl_slope_left=0.1,
-    pl_slope_left=(1, None),
+    # pl_slope_left=11,
+    pl_slope_left=(1, 1),
     # peak_power=(1000, 100),
     peak_power=1e3,
-    sigmoid_width=100,
-    # sigmoid_width=(100, 10),
-    # pl_slope_right=-5,
-    pl_slope_right=(-1, None),
-    k_break=(10, 200),
-    # k_break=50,
-    # fluctuations=1,
-    fluctuations=(4, 2),
-    envelope_fluctuations=(4, 2),
+    # sigmoid_width=1.8,
+    sigmoid_width=30,
+    # pl_slope_right=(-10, 2),
+    pl_slope_right=-10,
+    k_break=(120, 150),
+    # k_break=120,
+    # fluctuations=1e-1,
+    fluctuations=(1, 1),
+    envelope_fluctuations=(1, 1),
     envelope_loglogavgslope=(-4, 1),
+    # flexibility=(.2, .1),
                               ))
 
-# pipe_3.plot_prior_samples(mode="power spectrum", num=1, rolling=False, plot_welch_average=False, plot_data=False)
+# pipe_3.add_matern_signal_model(scale=(1e-1,1e-1), llslope=(-20, 1), cutoff=(100, 20), add_cfm_env=True)
+# pipe_3.add_cfm_signal_model(fluct=(1e-1,1e-1), llslope=(-1,1), flex=None, add_cfm_env=False)
 
-pipe_3.plot_prior_samples(mode="signal response", num=1, rolling=False, plot_welch_average=False, plot_data=True)
+# pipe_3.plot_prior_samples(mode="power spectrum", num=6, rolling=False, plot_welch_average=False, plot_data=False)
+# pipe_3.plot_prior_samples(mode="signal response", num=6, rolling=True, plot_welch_average=False, plot_data=True)
+# pipe_3.plot_prior_samples("signal & power spectrum", num=2, rolling=True, plot_welch_average=False, plot_data=True)
 
 raise_warning("Using welch averaged power spectrum for inference!!! ")
 
@@ -60,13 +64,14 @@ raise_warning("Using welch averaged power spectrum for inference!!! ")
 welch_k, welch_pow_spec = get_welch_averaged_ps()
 
 N_inv = NoiseCovarianceFromPs(one_sided_noise_ps=welch_pow_spec, callable_to_apply=lambda x: x**(-1),
-                                     data_grid=pipe_3.d_dom_real, silly_number=2)  # this N^{-1} produces samples with the correct variance
+                                     data_grid=pipe_3.d_dom_real)
 
 N_sqrt_inv = NoiseCovarianceFromPs(one_sided_noise_ps=welch_pow_spec, callable_to_apply=lambda x: x**(-1/2),
-                                          data_grid=pipe_3.d_dom_real, silly_number=jnp.sqrt(2))  # this applied twice gives N^{-1}
+                                          data_grid=pipe_3.d_dom_real)
 N_sqrt = NoiseCovarianceFromPs(one_sided_noise_ps=welch_pow_spec, callable_to_apply=lambda x: x**(1/2),
                                           data_grid=pipe_3.d_dom_real)
 
+print("Variance of data: " , np.var(pipe_3.d))
 # xi_111225 = np.loadtxt("xi_111225.txt")
 #
 # CL_N_inv_applied_111225 = np.loadtxt("CL_N_inv_applied_111225.txt")
@@ -93,19 +98,25 @@ wigner_xi_waveform = interpolate_waveform_from_inverted_wigner(pipe_3.t_ss)
 wigner_xi_waveform /= max(wigner_xi_waveform)  # The inverted wigner misses some normalization factors.
 # these can be recovered and should then give the correct amplitude. I set it manually here
 
-harmonic_wigner_xi_waveform = fw_hartley(wigner_xi_waveform, norm=None) / 2000
+norm = (pipe_3.k_signal_full)**(-2)
+norm[0]=1
+harmonic_wigner_xi_waveform = fw_hartley(wigner_xi_waveform, norm=None) / norm / 1e6
 
-pipe_3.plot_noise_sample_with_data(num=2, rolling=False)
+# pipe_3.plot_noise_sample_with_data(num=2, rolling=False)
 
 # pipe_3.set_init_pos(init_pos={"s_xi": jnp.array(harmonic_wigner_xi_waveform),
-#                               "s_flexibility": -1e3,
-#                               "s_loglogavgslope": 3.},
+#                               # "s_flexibility": -1e3,
+#                               "s_fluctuations": 1.,
+#                               "s_loglogavgslope": -1.},
 #                     plot=True, plot_welch_average=False)
 
-latent_samples = pipe_3.run_inference(kl_iterations=11, use_strict_minimizers=False, out_name="re_extra_pipe_3_141225",
+latent_samples = pipe_3.run_inference(kl_iterations=10, use_strict_minimizers=False, out_name="re_extra_pipe_3_151225_8",
                                       resume=True, choose_low_kl_starting_pos=False, geoVi=True)
 key = pipe_3.get_current_key()
 
 pipe_3.plot_posterior_signal(plot_nrt=True, print_posterior_parameters=True, over_full_signal_space=False,
-                             ylim=(-0.03, 0.03), xlim=(16, 17))
-pipe_3.plot_posterior_power_spectrum(mode="median", plot_welch_average=False)
+                             plot_data=False,
+                             # xlim=(16.35, 16.45),
+                             save_fig=False
+                             )
+pipe_3.plot_posterior_power_spectrum(mode="mean", plot_welch_average=False)

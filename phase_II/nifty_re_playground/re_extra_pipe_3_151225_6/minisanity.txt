@@ -1,0 +1,170 @@
+
+OPTIMIZE_KL: Iteration 0001 ⛰:+1.3159e+04
+OPTIMIZE_KL: #(Nonlinear sampling steps) (20, 20, 20, 20, 20, 20, 20, 20, 20, 20, 20, 20, 20, 20)
+OPTIMIZE_KL: #(KL minimization steps) 21
+OPTIMIZE_KL: Likelihood residual(s):
+'reduced χ²:     1.3±  0.0073, avg:   +0.034± 8.2e-06, #dof:   8191'
+
+OPTIMIZE_KL: Prior residual(s):
+s_envelope_fluctuations :: 'reduced χ²:     7.8±     2.4, avg:     -2.8±    0.44, #dof:      1'
+s_envelope_loglogavgslope:: 'reduced χ²:    0.51±    0.51, avg:    +0.51±    0.51, #dof:      1'
+s_envelope_xi           :: 'reduced χ²:     1.0±   0.011, avg: -0.00096±  0.0089, #dof:   8191'
+s_envelope_zeromode     :: 'reduced χ²:    0.55±    0.46, avg: +0.00014±    0.74, #dof:      1'
+s_fluctuations          :: 'reduced χ²:     7.7±     1.8, avg:     -2.8±    0.33, #dof:      1'
+s_k_break               :: 'reduced χ²:     5.3±     0.8, avg:     +2.3±    0.17, #dof:      1'
+s_pl_slope_left         :: 'reduced χ²:     2.3±    0.63, avg:     -1.5±     0.2, #dof:      1'
+s_xi                    :: 'reduced χ²:    0.91±    0.01, avg:   -7e-06±   0.018, #dof:   8191'
+
+
+OPTIMIZE_KL: Iteration 0002 ⛰:+1.3377e+04
+OPTIMIZE_KL: #(Nonlinear sampling steps) (13, 13, 9, 13, 13, 13, 19, 11, 18, 11, 13, 8, 11, 11)
+OPTIMIZE_KL: #(KL minimization steps) 7
+OPTIMIZE_KL: Likelihood residual(s):
+'reduced χ²:     1.3±  0.0025, avg:   +0.034± 4.9e-06, #dof:   8191'
+
+OPTIMIZE_KL: Prior residual(s):
+s_envelope_fluctuations :: 'reduced χ²:     9.9±     4.5, avg:     -3.1±    0.72, #dof:      1'
+s_envelope_loglogavgslope:: 'reduced χ²:    0.62±    0.58, avg:    +0.39±    0.69, #dof:      1'
+s_envelope_xi           :: 'reduced χ²:     1.0±   0.014, avg:   -0.001±   0.008, #dof:   8191'
+s_envelope_zeromode     :: 'reduced χ²:     1.2±     1.3, avg: +4.8e-06±     1.1, #dof:      1'
+s_fluctuations          :: 'reduced χ²:   1e+01±     6.0, avg:     -3.1±    0.96, #dof:      1'
+s_k_break               :: 'reduced χ²:     7.0±     6.2, avg:     +2.4±     1.2, #dof:      1'
+s_pl_slope_left         :: 'reduced χ²:     2.7±     1.6, avg:     -1.6±     0.5, #dof:      1'
+s_xi                    :: 'reduced χ²:    0.95±  0.0071, avg: +7.5e-08±   0.012, #dof:   8191'
+
+
+OPTIMIZE_KL: Iteration 0003 ⛰:+1.3522e+04
+OPTIMIZE_KL: #(Nonlinear sampling steps) (10, 10, 13, 10, 11, 8, 8, 12, 11, 11, 13, 13, 11, 12)
+OPTIMIZE_KL: #(KL minimization steps) 6
+OPTIMIZE_KL: Likelihood residual(s):
+'reduced χ²:     1.3±  0.0022, avg:   +0.034± 4.1e-06, #dof:   8191'
+
+OPTIMIZE_KL: Prior residual(s):
+s_envelope_fluctuations :: 'reduced χ²: 1.1e+01±     5.3, avg:     -3.3±    0.79, #dof:      1'
+s_envelope_loglogavgslope:: 'reduced χ²:     1.0±    0.98, avg:    +0.63±    0.79, #dof:      1'
+s_envelope_xi           :: 'reduced χ²:     1.0±  0.0091, avg:  -0.0012±   0.011, #dof:   8191'
+s_envelope_zeromode     :: 'reduced χ²:    0.91±    0.93, avg: +5.5e-07±    0.95, #dof:      1'
+s_fluctuations          :: 'reduced χ²: 1.1e+01±     4.8, avg:     -3.3±    0.73, #dof:      1'
+s_k_break               :: 'reduced χ²:     5.7±     4.4, avg:     +2.2±    0.86, #dof:      1'
+s_pl_slope_left         :: 'reduced χ²:     3.6±     3.3, avg:     -1.7±    0.89, #dof:      1'
+s_xi                    :: 'reduced χ²:    0.97±   0.014, avg:   +4e-07±  0.0087, #dof:   8191'
+
+
+OPTIMIZE_KL: Iteration 0004 ⛰:+1.3658e+04
+OPTIMIZE_KL: #(Nonlinear sampling steps) (9, 10, 10, 9, 7, 14, 13, 10, 7, 12, 8, 7, 12, 9)
+OPTIMIZE_KL: #(KL minimization steps) 6
+OPTIMIZE_KL: Likelihood residual(s):
+'reduced χ²:     1.3±  0.0037, avg:   +0.034± 3.7e-06, #dof:   8191'
+
+OPTIMIZE_KL: Prior residual(s):
+s_envelope_fluctuations :: 'reduced χ²: 1.2e+01±     6.9, avg:     -3.4±    0.99, #dof:      1'
+s_envelope_loglogavgslope:: 'reduced χ²:    0.93±    0.63, avg:    +0.91±    0.32, #dof:      1'
+s_envelope_xi           :: 'reduced χ²:     1.0±   0.023, avg:  -0.0012±   0.015, #dof:   8191'
+s_envelope_zeromode     :: 'reduced χ²:     1.1±     1.4, avg: +6.6e-08±     1.0, #dof:      1'
+s_fluctuations          :: 'reduced χ²: 1.2e+01±     6.2, avg:     -3.4±     0.9, #dof:      1'
+s_k_break               :: 'reduced χ²:     5.0±     2.9, avg:     +2.1±    0.67, #dof:      1'
+s_pl_slope_left         :: 'reduced χ²:     2.3±     1.7, avg:     -1.4±    0.53, #dof:      1'
+s_xi                    :: 'reduced χ²:    0.99±   0.016, avg: +2.1e-07±   0.012, #dof:   8191'
+
+
+OPTIMIZE_KL: Iteration 0005 ⛰:+1.3769e+04
+OPTIMIZE_KL: #(Nonlinear sampling steps) (7, 10, 9, 10, 10, 7, 12, 11, 14, 9, 10, 11, 9, 11)
+OPTIMIZE_KL: #(KL minimization steps) 6
+OPTIMIZE_KL: Likelihood residual(s):
+'reduced χ²:     1.4±  0.0048, avg:   +0.034±   2e-06, #dof:   8191'
+
+OPTIMIZE_KL: Prior residual(s):
+s_envelope_fluctuations :: 'reduced χ²: 1.2e+01±     4.8, avg:     -3.4±    0.69, #dof:      1'
+s_envelope_loglogavgslope:: 'reduced χ²:     1.3±     0.9, avg:     +1.1±    0.44, #dof:      1'
+s_envelope_xi           :: 'reduced χ²:     1.0±   0.017, avg:  -0.0013±  0.0093, #dof:   8191'
+s_envelope_zeromode     :: 'reduced χ²:    0.64±    0.55, avg: +7.2e-09±     0.8, #dof:      1'
+s_fluctuations          :: 'reduced χ²: 1.2e+01±     5.7, avg:     -3.4±    0.84, #dof:      1'
+s_k_break               :: 'reduced χ²:     5.2±     3.6, avg:     +2.1±    0.76, #dof:      1'
+s_pl_slope_left         :: 'reduced χ²:     2.4±     1.4, avg:     -1.5±    0.45, #dof:      1'
+s_xi                    :: 'reduced χ²:     1.0±  0.0076, avg: -1.5e-06±  0.0057, #dof:   8191'
+
+
+OPTIMIZE_KL: Iteration 0006 ⛰:+1.3752e+04
+OPTIMIZE_KL: #(Nonlinear sampling steps) (10, 10, 7, 7, 11, 8, 14, 9, 12, 8, 8, 9, 6, 10)
+OPTIMIZE_KL: #(KL minimization steps) 5
+OPTIMIZE_KL: Likelihood residual(s):
+'reduced χ²:     1.4±   0.003, avg:   +0.034±   2e-06, #dof:   8191'
+
+OPTIMIZE_KL: Prior residual(s):
+s_envelope_fluctuations :: 'reduced χ²: 1.3e+01±     6.6, avg:     -3.5±    0.95, #dof:      1'
+s_envelope_loglogavgslope:: 'reduced χ²:     1.7±     1.1, avg:     +1.2±    0.46, #dof:      1'
+s_envelope_xi           :: 'reduced χ²:     1.0±   0.021, avg:  -0.0014±   0.011, #dof:   8191'
+s_envelope_zeromode     :: 'reduced χ²:     2.3±     3.4, avg: +1.4e-09±     1.5, #dof:      1'
+s_fluctuations          :: 'reduced χ²: 1.3e+01±     6.5, avg:     -3.5±    0.95, #dof:      1'
+s_k_break               :: 'reduced χ²:     4.6±     2.9, avg:     +2.0±    0.67, #dof:      1'
+s_pl_slope_left         :: 'reduced χ²:     2.3±     1.2, avg:     -1.5±    0.37, #dof:      1'
+s_xi                    :: 'reduced χ²:     1.0±   0.018, avg: +7.8e-07±  0.0084, #dof:   8191'
+
+
+OPTIMIZE_KL: Iteration 0007 ⛰:+1.3741e+04
+OPTIMIZE_KL: #(Nonlinear sampling steps) (9, 8, 9, 7, 8, 9, 14, 9, 6, 9, 9, 9, 12, 10)
+OPTIMIZE_KL: #(KL minimization steps) 5
+OPTIMIZE_KL: Likelihood residual(s):
+'reduced χ²:     1.4±  0.0034, avg:   +0.034± 2.7e-06, #dof:   8191'
+
+OPTIMIZE_KL: Prior residual(s):
+s_envelope_fluctuations :: 'reduced χ²: 1.3e+01±     5.6, avg:     -3.5±    0.79, #dof:      1'
+s_envelope_loglogavgslope:: 'reduced χ²:     2.0±     1.3, avg:     +1.3±    0.52, #dof:      1'
+s_envelope_xi           :: 'reduced χ²:    0.99±   0.013, avg:  -0.0014±   0.011, #dof:   8191'
+s_envelope_zeromode     :: 'reduced χ²:    0.57±    0.41, avg: +3.9e-10±    0.75, #dof:      1'
+s_fluctuations          :: 'reduced χ²: 1.3e+01±     6.6, avg:     -3.5±    0.93, #dof:      1'
+s_k_break               :: 'reduced χ²:     4.7±     3.1, avg:     +2.0±    0.71, #dof:      1'
+s_pl_slope_left         :: 'reduced χ²:     3.5±     3.1, avg:     -1.7±    0.87, #dof:      1'
+s_xi                    :: 'reduced χ²:     1.0±   0.021, avg: +9.2e-07±   0.011, #dof:   8191'
+
+
+OPTIMIZE_KL: Iteration 0008 ⛰:+1.3784e+04
+OPTIMIZE_KL: #(Nonlinear sampling steps) (7, 10, 9, 7, 8, 9, 8, 7, 12, 7, 6, 8, 10, 11)
+OPTIMIZE_KL: #(KL minimization steps) 7
+OPTIMIZE_KL: Likelihood residual(s):
+'reduced χ²:     1.4±  0.0023, avg:   +0.034±   2e-06, #dof:   8191'
+
+OPTIMIZE_KL: Prior residual(s):
+s_envelope_fluctuations :: 'reduced χ²: 1.3e+01±     5.0, avg:     -3.6±     0.7, #dof:      1'
+s_envelope_loglogavgslope:: 'reduced χ²:     1.8±    0.64, avg:     +1.3±    0.24, #dof:      1'
+s_envelope_xi           :: 'reduced χ²:     1.0±   0.011, avg:  -0.0014±   0.011, #dof:   8191'
+s_envelope_zeromode     :: 'reduced χ²:    0.79±    0.85, avg: +1.8e-11±    0.89, #dof:      1'
+s_fluctuations          :: 'reduced χ²: 1.3e+01±     4.6, avg:     -3.6±    0.65, #dof:      1'
+s_k_break               :: 'reduced χ²:     3.8±     2.4, avg:     +1.9±    0.62, #dof:      1'
+s_pl_slope_left         :: 'reduced χ²:     3.3±     2.6, avg:     -1.7±    0.72, #dof:      1'
+s_xi                    :: 'reduced χ²:     1.0±   0.021, avg: -2.1e-07±   0.012, #dof:   8191'
+
+
+OPTIMIZE_KL: Iteration 0009 ⛰:+1.3814e+04
+OPTIMIZE_KL: #(Nonlinear sampling steps) (12, 10, 8, 9, 11, 12, 8, 9, 11, 6, 6, 9, 6, 7)
+OPTIMIZE_KL: #(KL minimization steps) 5
+OPTIMIZE_KL: Likelihood residual(s):
+'reduced χ²:     1.4±  0.0043, avg:   +0.034± 2.2e-06, #dof:   8191'
+
+OPTIMIZE_KL: Prior residual(s):
+s_envelope_fluctuations :: 'reduced χ²: 1.4e+01±     6.5, avg:     -3.6±    0.89, #dof:      1'
+s_envelope_loglogavgslope:: 'reduced χ²:     1.8±     1.0, avg:     +1.3±    0.41, #dof:      1'
+s_envelope_xi           :: 'reduced χ²:     1.0±   0.016, avg:  -0.0015±   0.011, #dof:   8191'
+s_envelope_zeromode     :: 'reduced χ²:    0.55±    0.65, avg: +4.6e-12±    0.74, #dof:      1'
+s_fluctuations          :: 'reduced χ²: 1.4e+01±     6.3, avg:     -3.6±    0.88, #dof:      1'
+s_k_break               :: 'reduced χ²:     4.6±     4.7, avg:     +1.9±    0.98, #dof:      1'
+s_pl_slope_left         :: 'reduced χ²:     3.1±     1.5, avg:     -1.7±    0.43, #dof:      1'
+s_xi                    :: 'reduced χ²:     1.0±  0.0075, avg: +1.5e-06±   0.014, #dof:   8191'
+
+
+OPTIMIZE_KL: Iteration 0010 ⛰:+1.3770e+04
+OPTIMIZE_KL: #(Nonlinear sampling steps) (11, 8, 6, 9, 8, 8, 9, 7, 10, 10, 7, 10, 8, 7)
+OPTIMIZE_KL: #(KL minimization steps) 5
+OPTIMIZE_KL: Likelihood residual(s):
+'reduced χ²:     1.4±  0.0031, avg:   +0.034±   2e-06, #dof:   8191'
+
+OPTIMIZE_KL: Prior residual(s):
+s_envelope_fluctuations :: 'reduced χ²: 1.3e+01±     5.2, avg:     -3.6±    0.73, #dof:      1'
+s_envelope_loglogavgslope:: 'reduced χ²:     1.9±     1.4, avg:     +1.3±    0.53, #dof:      1'
+s_envelope_xi           :: 'reduced χ²:    0.99±  0.0077, avg:  -0.0014±   0.012, #dof:   8191'
+s_envelope_zeromode     :: 'reduced χ²:    0.75±     1.3, avg: +8.6e-13±    0.87, #dof:      1'
+s_fluctuations          :: 'reduced χ²: 1.3e+01±     3.8, avg:     -3.6±    0.53, #dof:      1'
+s_k_break               :: 'reduced χ²:     3.6±     2.1, avg:     +1.8±    0.55, #dof:      1'
+s_pl_slope_left         :: 'reduced χ²:     4.9±     4.2, avg:     -2.0±    0.95, #dof:      1'
+s_xi                    :: 'reduced χ²:     1.0±    0.02, avg: -7.5e-07±   0.011, #dof:   8191'
+
