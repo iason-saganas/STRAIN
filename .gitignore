@@ -12,6 +12,12 @@ phase_I/out2/
 nifty/
 .coverage/
 phase_I/partial_successful_reconstruct_and_where_is_the_signal/outs
+
+phase_I/H-H1_LOSC_4_V2-1126257414-4096.hdf5
+phase_I/H-H1_LOSC_4_V2-1126259446-32.hdf5
+phase_I/L-L1_LOSC_4_V2-1126257414-4096.hdf5
+phase_I/L-L1_LOSC_4_V2-1126259446-32.hdf5
+
 phase_II/outs/
 phase_II/nifty_re_playground/re_pipe_1
 phase_II/nifty_re_playground/re_pipe_2
@@ -19,13 +25,25 @@ phase_II/nifty_re_playground/bunch_of_white_noise.pickle
 phase_II/nifty_re_playground/bunch_of_white_noise_smoothed.pickle
 phase_II/nifty_re_playground/wigner_results_from_penrose_xi_without_welch_average.pickle
 phase_II/nifty_re_playground/small_data_set
+phase_II/gw_search_results
+phase_II/nifty_re_playground/re_extra_pipe_3_141225
+phase_II/nifty_re_playground/re_extra_pipe_3_151225
+phase_II/nifty_re_playground/re_extra_pipe_3_151225_1
+phase_II/nifty_re_playground/re_extra_pipe_3_151225_2
+phase_II/nifty_re_playground/re_extra_pipe_3_151225_3
+phase_II/nifty_re_playground/re_extra_pipe_3_151225_4
+phase_II/nifty_re_playground/re_extra_pipe_3_151225_5
+phase_II/nifty_re_playground/re_extra_pipe_3_151225_6
+phase_II/nifty_re_playground/re_extra_pipe_3_151225_7
 
 phase_III/sde1
+phase_III/sde1_with_fw_model_log
 phase_III/sde2
 phase_III/sde3
 phase_III/sde4
 phase_III/sde5
 phase_III/sde6
+
 
 # Ignore OS files
 .DS_Store
