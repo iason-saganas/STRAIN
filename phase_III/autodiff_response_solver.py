@@ -95,8 +95,8 @@ inference = InferenceSchemeRe(t=gw_times, d=data, key=key, e_fac=1, r_fac=1, plo
 inference.add_noise_op(noise_var_level=noise_lvl)
 inference.add_custom_signal_model(custom_signal_model=s_prime)
 
-latent_samples, other_stuff = inference.run_inference(kl_iterations=3, n_samples=15, use_strict_minimizers=True,
-                                                      out_name="sde8", resume=True, choose_low_kl_starting_pos=False, geoVi=True)
+latent_samples, other_stuff = inference.run_inference(kl_iterations=10, n_samples=15, use_strict_minimizers=True,
+                                                      out_name="sde7", resume=True, choose_low_kl_starting_pos=False, geoVi=True)
 
 signal_samples = [generative_wavelet(xi) for xi in latent_samples]
 s_prime_samples = [s_prime(xi) for xi in latent_samples]

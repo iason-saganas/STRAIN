@@ -1,5 +1,7 @@
 import jax.numpy as jnp
 import jax
+from scipy.signal.windows import tukey
+
 jax.config.update("jax_enable_x64", True)
 import nifty.nifty.re as jft
 from diffrax import diffeqsolve, ODETerm, SaveAt, Tsit5
@@ -93,7 +95,7 @@ def diffrax_solver(evolution_times, omega, gamma, xi):
 
 class AutoDiffEquationSolver(jft.Model):
     def __init__(self, prefix, reconstruction_times, cfm_sampling_times, omega_cfm, gamma_cfm, xi_cfm, scaling_constant,
-                 solver=rk4):
+                 solver=rk4, tukey_window=False):
 
         self.prefix = prefix
         self.reconstruction_times = reconstruction_times
@@ -128,6 +130,11 @@ class AutoDiffEquationSolver(jft.Model):
         # else:
         #     self.scaling = lambda *args: 1
 
+        if tukey_window:
+            self.win = tukey(len(self.evolution_times), alpha=0.3)
+        else:
+            self.win = 1
+
         super().__init__(domain=self.dom, target=self.targ)
 
     def __call__(self, p):
@@ -139,7 +146,7 @@ class AutoDiffEquationSolver(jft.Model):
 
         # waveform = euler(times=self.evolution_times[::self.step], omega=omega, gamma=gamma, xi=xi)
         waveform = self.solver(times=self.evolution_times, omega=omega, gamma=gamma, xi=xi)
-        return waveform * scaling
+        return waveform * scaling * self.win
 
 
     def get_model_components(self):
