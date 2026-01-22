@@ -1,3 +1,5 @@
+from functools import partial
+
 from scipy.signal.windows import tukey
 from scipy.interpolate import interp1d
 from data.style_components.matplotlib_style import *
@@ -12,8 +14,8 @@ from typing import Literal, Optional, Callable
 from time import time
 from jax import vmap
 from scipy.ndimage import gaussian_filter
+from scipy.signal import find_peaks
 import os
-
 from .calculate_kl import calculate_kl_val_and_grad, get_beneficial_position
 from .calculate_pseudoinverse import find_penrose_moore_solution, sample_from_ps
 import datetime
@@ -44,20 +46,21 @@ def pickle_me_this(filename: str, data_to_pickle: object):
 
 
 def usual_plot(xl=r"Time $t$ $\mathrm{[sec]}$", yl=r"Strain $h$ $\mathrm{[10^{-19}]}$", title=None, xlim=None, ylim=None,
-               show=True, close=False, save_fig=False, save_path=""):
-    plt.xlabel(xl, fontsize=20)
-    plt.ylabel(yl, fontsize=20)
-    plt.title(title, fontsize=25)
-    ax = plt.gca()
+               show=True, close=False, save_fig=False, save_path="", custom_ax=None):
+    if custom_ax is None:
+        ax = plt.gca()
+    else:
+        ax = custom_ax
+
+    ax.set_xlabel(xl, fontsize=20)
+    ax.set_ylabel(yl, fontsize=20)
+    ax.set_title(title, fontsize=25)
+
     labels = ax.get_legend_handles_labels()
-    plt.xlim(xlim)
-    plt.ylim(ylim)
+    ax.set_xlim(xlim)
+    ax.set_ylim(ylim)
     if labels != ([], []):
-        plt.legend()
-    if save_path != "":
-        plt.tight_layout()
-        current_date = datetime.datetime.now()
-        plt.savefig(f"{save_path}_{current_date}.png")
+        ax.legend()
     if save_fig:
         plt.tight_layout()
         current_date = datetime.datetime.now()
@@ -67,6 +70,7 @@ def usual_plot(xl=r"Time $t$ $\mathrm{[sec]}$", yl=r"Strain $h$ $\mathrm{[10^{-1
             plt.savefig(f"{save_path}_{current_date}.png")
 
     if show:
+        plt.tight_layout()
         plt.show()
     if close:
         plt.close()
@@ -134,6 +138,25 @@ def kl_sampling_rate(index: int):
     if index > 10:
         itrs = 30
     return itrs
+
+
+import re
+from pathlib import Path
+def get_last_iteration(out_name):
+    path = Path(out_name) / "minisanity.txt"
+    pattern = re.compile(r"OPTIMIZE_KL: Iteration\s+(\d+)")
+
+    last_iter = 1
+    try:
+        with open(path, "r") as f:
+            for line in f:
+                m = pattern.search(line)
+                if m:
+                    last_iter = int(m.group(1))
+    except FileNotFoundError:
+        pass
+
+    return last_iter
 
 
 class InferenceSchemeRe():
@@ -210,7 +233,8 @@ class InferenceSchemeRe():
         self.k_signal_full = join_k_arrays(self.s_dom_harmonic)
 
         self.plotting_callback = plotting_callback
-        self.amplitude_op = None
+        self.amplitude_op = None  # undo calls to amplitude_op and use self.ps instead
+        self.ps = None
         self.s_model = None
 
         self.inv_N_cov = None  # to build residuals
@@ -265,8 +289,8 @@ class InferenceSchemeRe():
 
     def add_cfm_signal_model(self, fluct:tuple, llslope:tuple, flex:tuple | None = None, asper:tuple | None=None,
                              offset_mean:float = 0, offset_std:tuple = (1e-16, 1e-16), model_prefix="s_",
-                             add_power_spectrum_template=None, add_custom_power_op=(None,), square_iwp=False,
-                             add_cfm_env=False):
+                             add_power_spectrum_template=None, add_custom_power_ops=(None,), square_iwp=False,
+                             add_cfm_env=False, apply_tukey_window=True):
         """
 
         :param fluct:
@@ -277,8 +301,10 @@ class InferenceSchemeRe():
         :param offset_std:
         :param model_prefix:
         :param add_power_spectrum_template:         An array over unique frequency values to add as a baseline to the
-                                                    power spectrum of the correlated field.
-        :param add_custom_power_op:                 A list of custom operators in power space to be added to the model,
+                                                    power spectrum of the correlated field. DON'T USE IN NEW CODE, ONLY
+                                                    FOR BACKWARDS-COMPATIBILITY; INSTEAD PASS A LIST OF OPERATORS VIA
+                                                    add_custom_power_ops.
+        :param add_custom_power_ops:                 A list of custom operators in power space to be added to the model,
                                                     e.g. a line model for spectral lines in the power spectrum.
 
         :return:
@@ -289,7 +315,7 @@ class InferenceSchemeRe():
         cfm_maker.add_fluctuations(shape=(self.n_ss,), distances=self.dist_ss, fluctuations=fluct,
                                    loglogavgslope=llslope, flexibility=flex, asperity=asper, harmonic_type="fourier",
                                    non_parametric_kind="power", hack_add_power_spectrum_template=add_power_spectrum_template,
-                                   hack_custom_amplitude_operators=add_custom_power_op,
+                                   hack_custom_amplitude_operators=add_custom_power_ops,
                                    hack_make_iwp_pos_definite=square_iwp)
 
         parameter_choices = {
@@ -339,7 +365,10 @@ class InferenceSchemeRe():
 
         else:
             s_model_fin = cfm_maker.finalize()
-            s_model = lambda p: s_model_fin(p) * tukey(self.n_ss, alpha=0.3)
+            if apply_tukey_window:
+                s_model = lambda p: s_model_fin(p) * tukey(self.n_ss, alpha=0.3)
+            else:
+                s_model = lambda p: s_model_fin(p)
             s_model.domain = s_model_fin.domain
 
 
@@ -468,13 +497,17 @@ class InferenceSchemeRe():
         :param plot_welch_average:  If plot and plot_welch_average, plots welch average. Useful for noise comparison.
         :return:
         """
+        print("Type of init pos: ", type(init_pos))
         if type(init_pos) is jft.Vector:
             init_pos = init_pos._tree
+            print("Type of init pos now: ", type(init_pos))
 
         lh = self.build_lh(supress_print=True)
 
         print("You are trying to set an initial positions. Please note that the likelihood domain keys are: \n\t",
               "<", *lh.domain.keys(),">")
+        print("Out of these keys, the input initial position seems to not contain \n\t", *[k for k in lh.domain.keys() if k not in init_pos.keys()],
+              " and thus these values will be drawn randomly.")
 
 
         self.key, key_i = jax.random.split(self.key)
@@ -497,14 +530,17 @@ class InferenceSchemeRe():
 
             if plot_welch_average:
                 plot_welch_averaged_ps(axs[0])
-            axs[0].loglog(self.k_signal, init_ps)
+            axs[0].loglog(self.k_signal, init_ps, label="initial power spectrum")
             axs[0].set_xlabel("Frequency $f$")
             axs[0].set_ylabel("Power")
 
-            axs[1].plot(self.t_ds, init_s_prime)
+
+            axs[1].plot(self.t_ds, init_s_prime, label="initial position in data space")
             axs[1].set_xlabel("Time $t$")
             axs[1].set_ylabel("Strain")
 
+            axs[0].legend()
+            axs[1].legend()
             plt.tight_layout()
             plt.show()
 
@@ -560,34 +596,49 @@ class InferenceSchemeRe():
                               f"variance level {level}.")
             self.add_noise_op(noise_var_level=level)
 
-        lh = jft.Gaussian(data=self.d, noise_cov_inv=self.inv_N_cov, noise_std_inv=self.sqrt_inv_N_cov).amend(s_prime)
+        # self.inv_N_cov = jft.LogNormalPrior(mean=1, std=.1, name="inv noise level", dtype=np.float64, shape=())
+        if isinstance(self.inv_N_cov, jft.Model):
+            print("Using variable Gaussian covariance energy")
+            # std_inv_model = jft.Model(call= lambda x: jnp.sqrt(self.inv_N_cov(x)), domain=self.inv_N_cov.domain)
+            input_restore = jft.Model(call=lambda xi: (s_prime(xi), self.sqrt_inv_N_cov(xi)*jnp.ones_like(self.d)),
+                                      domain=s_prime.domain | self.inv_N_cov.domain)
+            lh = jft.VariableCovarianceGaussian(data=self.d).amend(input_restore, domain=input_restore.domain)
+            lh.noise_cov_inv = self.inv_N_cov  # using this in the plotting callback
+        else:
+            lh = jft.Gaussian(data=self.d, noise_cov_inv=self.inv_N_cov, noise_std_inv=self.sqrt_inv_N_cov).amend(s_prime)
         return lh
 
     def run_inference(self, kl_iterations=10, n_samples=kl_sampling_rate, use_strict_minimizers=False, out_name="out",
-                     resume=True, choose_low_kl_starting_pos=False, geoVi=True, **kwargs):
+                     resume=True, choose_low_kl_starting_pos=False, geoVi=True, chi2_threshold=jnp.inf, max_kl_iter=None,
+                      **kwargs):
         """
 
-        :param kl_iterations:
-        :param n_samples:
-        :param use_strict_minimizers:
-        :param out_name:
-        :param resume:
+        :param kl_iterations:               The number of kl iterations to run at least. If max_kl_iter is None,
+                                            exactly the number of kl iterations.
+        :param n_samples:                   How many samples to draw from the posterior distribution during each kl
+                                            iteration.
+        :param use_strict_minimizers:       Whether to decrease step size in all CG.
+        :param out_name:                    Where results will be saved.
+        :param resume:                      Whether to use stored results
         :param choose_low_kl_starting_pos:  If self.init_pos was not set explicitly, tries to find a minimum kl starting
                                             position.
         :param geoVi:                       If true, use non-linear resampling mode.
+        :param chi2_threshold:              If not jnp.inf, as many kl iterations will be run (at most max_kl_iter)
+                                            until chi^2 falls under this treshold.
+        :param max_kl_iter:                 Alternate termination reason for iterative optimization of KL.
         :param kwargs:                      Kwargs to be passed to optimize_kl.
         :return:
         """
         lh = self.build_lh()
 
+        min_kl_iter = kl_iterations
+        if chi2_threshold != jnp.inf and ((min_kl_iter is None) or max_kl_iter is None):
+            raise ValueError("Please provide min_kl_iter and max_kl_iter if you want to iteratively compute "
+                             "kl until chi2_threshold=", chi2_threshold, " is hit.")
+
+
         if self.draw_linear_kwargs is None:
             self.add_minimizers(use_strict=use_strict_minimizers)
-
-        if self.plotting_callback is not None:
-            plotting_callback = lambda samples, vi_state: (
-                self.plotting_callback(out_name, kl_iterations, lh, samples, vi_state))
-        else:
-            plotting_callback = None
 
         self.key, key_sampler, key_i = jax.random.split(self.key, 3)
 
@@ -606,28 +657,77 @@ class InferenceSchemeRe():
         else:
             sample_mode="linear_resample"
 
-
         starting_time = time()
 
-        samples, other_stuff = jft.optimize_kl(
-            likelihood=lh,
-            position_or_samples=initial_position,
-            key=key_sampler,
-            n_total_iterations=kl_iterations,
-            n_samples=n_samples,
-            draw_linear_kwargs=self.draw_linear_kwargs,
-            nonlinearly_update_kwargs=self.nonlinearly_update_kwargs,
-            kl_kwargs=self.kl_kwargs,
-            sample_mode=sample_mode,
-            resume=resume,
-            odir=out_name,
-            callback=plotting_callback,
-            **kwargs,
-        )
+        if chi2_threshold == jnp.inf:
+
+            if self.plotting_callback is not None:
+                plotting_callback = lambda samples, vi_state: (
+                    self.plotting_callback(out_name, kl_iterations, lh, samples, vi_state,
+                                           ps_op=lambda p: self.amplitude_op(p) ** 2)
+                )
+            else:
+                plotting_callback = None
+
+            print("Running inference vanilla mode...")
+            # Ignore the chi2 thresholding
+            starting_time = time()
+
+            samples, vi_info = jft.optimize_kl(
+                likelihood=lh,
+                position_or_samples=initial_position,
+                key=key_sampler,
+                n_total_iterations=kl_iterations,
+                n_samples=n_samples,
+                draw_linear_kwargs=self.draw_linear_kwargs,
+                nonlinearly_update_kwargs=self.nonlinearly_update_kwargs,
+                kl_kwargs=self.kl_kwargs,
+                sample_mode=sample_mode,
+                resume=resume,
+                odir=out_name,
+                callback=plotting_callback,
+                **kwargs,
+            )
+        else:
+            print("Running inference chi2 thresholding mode...")
+            chi2 = jnp.inf
+            vi_iterations = get_last_iteration(out_name) - 1  # e.g.: if last_iteration = 1, subtract 1 to get 1 inside
+            while (chi2 > chi2_threshold) or (vi_iterations <= min_kl_iter) or np.isnan(chi2):
+                vi_iterations += 1
+
+                if vi_iterations > max_kl_iter:
+                    print("Max kl iterations reached at chi square ", chi2)
+                    break
+
+                if self.plotting_callback is not None:
+                    plotting_callback = lambda samples, vi_state: (
+                        self.plotting_callback(out_name, vi_iterations, lh, samples, vi_state,
+                                               ps_op=lambda p: self.amplitude_op(p) ** 2)
+                    )
+                else:
+                    plotting_callback = None
+
+                samples, vi_info = jft.optimize_kl(
+                    likelihood=lh,
+                    position_or_samples=initial_position,
+                    key=key_sampler,
+                    n_total_iterations=vi_iterations,
+                    n_samples=n_samples,
+                    draw_linear_kwargs=self.draw_linear_kwargs,
+                    nonlinearly_update_kwargs=self.nonlinearly_update_kwargs,
+                    kl_kwargs=self.kl_kwargs,
+                    sample_mode=sample_mode,
+                    resume=resume,
+                    odir=out_name,
+                    callback=plotting_callback,
+                    **kwargs,
+                )
+
+                d_th_samples = [self.signal_response()(xi) for xi in samples]
+                chi2 = mean_red_chi2(data=self.d, d_th_samples=d_th_samples, N_inv_op=self.inv_N_cov)
+
 
         ending_time = time()
-
-
         duration = ending_time - starting_time
         if duration > 60:
             duration = (np.round(duration/60,2), "minute(s)")
@@ -637,7 +737,7 @@ class InferenceSchemeRe():
         self.posterior_xi_samples = samples
         print("\nSaved posterior latent samples as self.posterior_xi_samples. Finished execution in ", *duration)
         print("Please ensure to run get_current_key().")
-        return samples, other_stuff
+        return samples, vi_info
 
 
     def get_current_key(self):
@@ -654,7 +754,8 @@ class InferenceSchemeRe():
         if self.posterior_xi_samples is None:
             raise ValueError("Call 'run_inference()' before reporting statistics.")
         if self.amplitude_op is None:
-            raise ValueError("amplitude operator must not be None")
+            self.amplitude_op = lambda x: np.nan
+            print("No amplitude operator found, returning nan for power spectrum")
 
         post_xi_samples = self.posterior_xi_samples
         ps = lambda x: self.amplitude_op(x)**2
@@ -890,7 +991,7 @@ class InferenceSchemeRe():
             axs[0].plot(x_ps, sl)
 
         for sl in signal_space_samples:
-            axs[1].plot(x_s, sl)
+            axs[1].plot(x_s, sl, label="normalization probably wrong see bw_hartley")
 
         axs[1].plot(self.t_ds, self.d, label="Actual data", color="orange")
 
@@ -927,6 +1028,9 @@ class InferenceSchemeRe():
             signal_std = signal_mean_std_ss[1]
             time = self.t_ss
 
+        if plot_data:
+            plt.plot(self.t_ds, self.d, label="Data", color="orange")
+
         # shaded 1-sigma region
         plt.fill_between(time,
                          signal_mean - signal_std,
@@ -937,8 +1041,6 @@ class InferenceSchemeRe():
         # plot the mean line on top
         plt.plot(time, signal_mean, color=blue, label=r"Reconstructed signal", lw=2)
 
-        if plot_data:
-            plt.plot(self.t_ds, self.d, label="Data", color="orange")
 
         if plot_nrt:
             nrt_strain_values = np.loadtxt("/Users/iason/PycharmProjects/STRAIN/data/data_txt/num_rel_template_strain_values.txt") * 1e19
@@ -1004,7 +1106,22 @@ class InferenceSchemeRe():
         usual_plot(xl="Frequency $f$", yl="Power", **kwargs)
 
 
-    def plot_posterior_harmonic_xi_s(self, multiply_with_posterior_amp_spec=False, show=True):
+    def plot_posterior_harmonic_xi_s(self, multiply_with_posterior_amp_spec=False,
+                                     multiply_with_posterior_amp_spec_v2=False,
+                                     show=True):
+        """
+        multiply_with_posterior_amp_spec_v2:
+
+            Let the prior covariance S be <s s dag> ~ p_s_prior, I believe that the diagonal of the posterior covariance is
+            D = (F^-1) <|xi_s|^2> p_s_posterior (F)
+
+            Allowing to define an updated posterior power spectrum as p_D = <|xi_s|^2> p_s_posterior.
+
+        :param multiply_with_posterior_amp_spec:
+        :param multiply_with_posterior_amp_spec_v2:
+        :param show:
+        :return:
+        """
         posterior_latent_sl = self.posterior_xi_samples
         posterior_latent_mean_std = jft.mean_and_std(posterior_latent_sl)
         posterior_latent_mean, _ = posterior_latent_mean_std
@@ -1033,6 +1150,31 @@ class InferenceSchemeRe():
             plt.loglog()
 
             usual_plot(xl="Frequency $f$", yl=r"$\sqrt{\mathrm{power}}$")
+
+        elif multiply_with_posterior_amp_spec_v2:
+
+            xi_s_samples_squared = jnp.array([jnp.abs(xl["s_xi"])**2 for xl in self.posterior_xi_samples])
+            mean_squared_xi_s = jnp.mean(xi_s_samples_squared, axis=0)
+
+            ps_mean_std, _, _ = self.get_posterior_statistics()
+            ps_mean = ps_mean_std[0][expander]
+
+
+            p_D = ps_mean * mean_squared_xi_s
+
+            _, k_lengths, power_spectrum = unpickle_me_this(
+                "/Users/iason/PycharmProjects/STRAIN/data/data_pickle_or_hdf5/results_from_welch_averaging_data.pickle",
+                absolute_path=True)
+            k_lengths = k_lengths[1:]  # remove 0-mode for simplicity
+            spectrum_welch = power_spectrum.val[1:]
+
+            plt.plot(k_lengths, spectrum_welch, label=r"Welch average", color="orange")
+            plt.plot(self.k_signal_full, p_D, "r.",
+                     label=r"$p_D$", markersize=4)
+            plt.plot(self.k_signal_full, ps_mean, ".", label=r"Posterior $p(k)$", markersize=4)
+            plt.loglog()
+
+            usual_plot(xl="Frequency $f$", yl=r"$\mathrm{power}$")
 
         else:
             plt.plot(self.k_signal_full, posterior_xi_s_mean, "r-", label=r"Posterior mean")
@@ -1087,6 +1229,40 @@ class InferenceSchemeRe():
             plt.show()
 
         return penrose_xi
+
+
+def iterative_midpoint_average(data, n_iter=2, plot=False):
+    """
+    Gets the middle line (large scale structure) of the data and the standard deviation of the data about that
+    middle line by iterative midpoint averaging, i.e. each iteration replaces x_i by
+        (x_{i-1} + x_{i+1}) / 2.
+    :param data:   array-like,  To analyze
+    :param plot:   boolean,     If true, plots the data with the found middle line
+    :return:
+    """
+    data = np.asarray(data, dtype=float)
+    x = np.real(data).copy()
+
+    for _ in range(n_iter):
+        x_new = x.copy()
+        x_new[1:-1] = 0.5 * (x[:-2] + x[2:])
+        x = x_new
+
+    middle = x
+    residuals = np.real(data) - middle
+    width = np.std(residuals)
+
+    if plot:
+        t = np.arange(len(x))
+        plt.plot(t, np.real(data), alpha=0.5, label="data")
+        plt.plot(t, middle, lw=2, label=f"middle ({n_iter} iters)")
+        plt.fill_between(t, middle - width, middle + width, alpha=0.3)
+        plt.legend()
+        plt.show()
+
+    print("Standard deviation of the data about middle line is: {:.3f} ".format(width), ", using iterative "
+                                                                                        "midpoint averaging.")
+    return middle, width
 
 
 def fw_hartley(x, norm="ortho"):
@@ -1363,8 +1539,10 @@ def tmp2(k, p, length_of_data):
     return expand_rfft(tmp, length_of_data)
 
 
-def Stress_re(xi, time, supress_print=False, downsample=False):
+def Stress_re(xi, time, supress_print=False, downsample=False, norm="ortho"):
     """
+    Implements S_ft, i.e. rows are frequencies and columns are times.
+
     See also nifty8 `Stress` function.
 
     :param xi: jnp.array        A field to calculate the wigner function for. Either of complex or real data type.
@@ -1374,17 +1552,6 @@ def Stress_re(xi, time, supress_print=False, downsample=False):
     :return:
     """
 
-    FFT = lambda x, ax=-1: jnp.fft.fft(x, norm="ortho", axis=ax)
-    iFFT = lambda x, ax=-1: jnp.fft.ifft(x, norm="ortho", axis=ax)
-
-    if jnp.iscomplexobj(xi):
-        xi = iFFT(xi)  # go to real space
-
-    if downsample:
-        step = 2
-        xi = xi[::step]
-        time = time[::step]
-
     t0 = time[0]
     dt = time[1]-time[0]
     N = len(xi)
@@ -1392,7 +1559,18 @@ def Stress_re(xi, time, supress_print=False, downsample=False):
     k = f.copy()
     df = f[1] - f[0]
     t = jnp.arange(N) / (N*df)  # dual time, equal to input time - time[0].
+    T = N * dt
 
+    FFT_physical = lambda x, ax=-1: jnp.fft.fft(x, norm=norm, axis=ax) * T / jnp.sqrt(N)
+    iFFT_physical = lambda x, ax=-1: jnp.fft.ifft(x, norm=norm, axis=ax) * jnp.sqrt(N) / T
+
+    if jnp.iscomplexobj(xi):
+        xi = iFFT_physical(xi)  # go to real space
+
+    if downsample:
+        step = 2
+        xi = xi[::step]
+        time = time[::step]
 
     if not supress_print:
         print("\nCalculating stress...")
@@ -1411,11 +1589,11 @@ def Stress_re(xi, time, supress_print=False, downsample=False):
 
     if not supress_print:
         print("\t Calculating zeta plus in Fourier space")
-    tilde_zeta_plus = FFT(zeta_plus, ax=0)
+    tilde_zeta_plus = FFT_physical(zeta_plus, ax=0)
 
     if not supress_print:
         print("\t Calculating zeta minus in Fourier space")
-    tilde_zeta_minus = FFT(zeta_minus, ax=0)
+    tilde_zeta_minus = FFT_physical(zeta_minus, ax=0)
 
     if not supress_print:
         print("\t Calculating Phi matrix")
@@ -1423,7 +1601,7 @@ def Stress_re(xi, time, supress_print=False, downsample=False):
 
     if not supress_print:
         print("\t Inverse Fourier-Transforming columns of Phi matrix")
-    S = iFFT(Phi, ax=1)
+    S = iFFT_physical(Phi, ax=1)
     S.block_until_ready()
 
     if not supress_print:
@@ -1561,8 +1739,13 @@ def smooth_matrix(
         raise ValueError(f"Unknown mode: {mode}")
 
 def visualize_stress(stress_matrix, rows, cols, smooth=False, detect_outliers=False, tl="", hlines=None, vlines=None,
-                     smoothing_level=5, cmap="plasma", **kwargs):
-
+                     smoothing_level=5, cmap="plasma", plot_colorbar=True, colorbar_label="Stress",
+                     xl=r"Time $\mathrm{[s]}$", yl=r"Frequency $\mathrm{[Hz]}$", custom_ax=None, **kwargs):
+    if custom_ax is None:
+        plt.figure(figsize=(10, 6))
+        ax = plt.gca()
+    else:
+        ax = custom_ax
     stress_matrix = stress_matrix.real
 
     cols_are_increasing = np.all(np.diff(cols) > 0)  # strictly increasing
@@ -1601,20 +1784,19 @@ def visualize_stress(stress_matrix, rows, cols, smooth=False, detect_outliers=Fa
         plt.ylabel('Mean frequency of outliers')
         plt.show()
 
-    plt.figure(figsize=(10,6))
-    plt.imshow(stress_matrix, origin='lower', aspect='auto',
+    ax.imshow(stress_matrix, origin='lower', aspect='auto',
                extent=[np.min(cols), np.max(cols), np.min(rows), np.max(rows)],
                cmap=cmap, interpolation='nearest')
 
     if hlines is not None:
-        plt.hlines(hlines, 0, np.max(cols), color="r", ls="-")
+        ax.hlines(hlines, 0, np.max(cols), color="r", ls="-")
     if vlines is not None:
-        plt.vlines(vlines, 0, np.max(rows), color="r", ls="-")
+        ax.vlines(vlines, 0, np.max(rows), color="r", ls="-")
 
-    plt.colorbar(label='Stress')
-    plt.tight_layout()
+    if plot_colorbar:
+        ax.colorbar(label=colorbar_label)
 
-    usual_plot(xl='Time [s]', yl='Frequency [Hz]', title='Wigner function'+tl, **kwargs)
+    usual_plot(xl=xl, yl=yl, title=tl, custom_ax=ax, **kwargs)
 
 
 def detect_outliers_in_stress(stress_matrix, fac, cols, rows):
@@ -1634,13 +1816,31 @@ def dt_(dom):
     return ift.DomainTuple.make(dom)
 
 
-class GaussianComb(jft.Model):
-    def __init__(self, unique_k_lengths:jnp.array, list_of_peaks:jnp.array, list_of_amplitudes:jnp.array, rel_sigma_amp = .1, rel_sigma_widths=.1,
-                 a_priori_width_of_peaks = 10, abs_width_sigma=1, abs_amp_sigma=1):
+class NormedGaussianComb(jft.Model):
+    def __init__(self,
+                 unique_k_lengths:jnp.array,
+                 list_of_peaks:jnp.array,
+                 list_of_amplitudes:jnp.array,
+
+                 rel_sigma_amp = .1,
+                 rel_sigma_widths=.1,
+                 a_priori_width_of_peaks = 10,
+
+                 abs_width_sigma=1,
+                 abs_amp_sigma=1,
+
+                 vary_positions=False,
+
+                 norm=True
+                 ):
         """
 
         Generates a sum of Gaussian parametric peaks at fixed positions and with lognormal priors set on the
         widths and amplitudes.
+
+        The comb is normed by its area so the peak of the heights have no overall contributions to the global variance,
+        but just inject power at specific frequencies. To separate functionality, this operator should not couple to
+        the fluctuations parameter of the deviation field.
 
         :param unique_k_lengths:        The unique frequencies, the operator is built in amplitude space.
         :param list_of_peaks:           Array of peak positions (frequencies)
@@ -1648,8 +1848,10 @@ class GaussianComb(jft.Model):
         :param rel_sigma_amp:           The relative standard deviation set on the lognormal amplitude prior
         :param rel_sigma_widths:        The relative standard deviation set on the lognormal frequency width prior
         :param a_priori_width_of_peaks: In Hz.
+        :param vary_positions:          Whether to set a normal prior on the peak positions with some internally set
+                                        variance.
+        :param norm:                    If false, skips the normalization (not recommended).
         """
-        ## aaah : implement as two vectors: xi_g_amp and xi_g_width of length of the power spectrum domain
 
         self.f = unique_k_lengths
         self.N = len(list_of_peaks)
@@ -1666,19 +1868,29 @@ class GaussianComb(jft.Model):
         else:
             self.sigma_amp = abs_amp_sigma
 
+        self.sigma_pos = self.positions / 1e3
+
         self.xi_g_amp = jft.LogNormalPrior(mean=list_of_amplitudes, std=self.sigma_amp, name="xi_g_amp",
                                            dtype=jnp.float64, shape=(self.N,))
-        # self.xi_g_amp = jft.NormalPrior(mean=0, std=list_of_amplitudes, name="xi_g_amp",
-        #                                    dtype=jnp.float64, shape=(self.N,))
         self.xi_g_width = jft.LogNormalPrior(mean=self.frequency_widths, std=self.sigma_widths, name="xi_g_width",
                                              dtype=jnp.float64, shape=(self.N,))
+        self.xi_g_pos = jft.NormalPrior(mean=self.positions, std=self.sigma_pos, name="xi_g_pos",
+                                             dtype=jnp.float64, shape=(self.N,))
+
+        if vary_positions:
+            self.xi_g_pos_vary_or_cst = lambda xi: self.xi_g_pos(xi)
+            total_domain = self.xi_g_amp.domain | self.xi_g_width.domain | self.xi_g_pos.domain
+        else:
+            self.xi_g_pos_vary_or_cst = lambda xi: self.positions
+            total_domain =  self.xi_g_amp.domain | self.xi_g_width.domain
 
         def single_gaussian(amp, width, pos):
             return amp**2 * jnp.exp(-0.5 * ((self.f - pos) / width) ** 2)
 
         self.sg = single_gaussian
+        self.normalize = lambda x, y: y / jnp.trapezoid(y=y, x=x) if norm else lambda x, y: y
 
-        super().__init__(domain=self.xi_g_amp.domain | self.xi_g_width.domain)
+        super().__init__(domain=total_domain)
 
     def __call__(self, xi):
         """
@@ -1697,19 +1909,22 @@ class GaussianComb(jft.Model):
         """
         amplitude_vector = self.xi_g_amp(xi)
         width_vector = self.xi_g_width(xi)
-        position_vector = self.positions
+        position_vector = self.xi_g_pos_vary_or_cst(xi)
 
         gaussians = vmap(self.sg)(amplitude_vector, width_vector, position_vector)
-        # comb = jnp.sum(gaussians, axis=0)
-        # norm = jnp.trapezoid(comb, x=self.f)
-        return jnp.sum(gaussians, axis=0)
+        # return jnp.sum(gaussians, axis=0)
+        gc = jnp.sum(gaussians, axis=0)
+        # norm = jnp.trapezoid(y=gc, x=self.f)
+        return self.normalize(y=gc, x=self.f)
 
 
-class PowerSpectrumTemplate(jft.Model):
+class ScaledPowerSpectrumTemplate(jft.Model):
     def __init__(self, ps_template:jnp.array, scale=(1,.1)):
         """
         Creates an operator in power space that consists of a scalable power spectrum template.
-        :param ps_template:     The fixed power spectrum template.
+        :param ps_template:      The fixed power spectrum template.
+        :param scale:            Scaling factor: if e.g. 2, contributes twice the variance of the template to the
+                                 overall process.
         """
         self.ps_template = ps_template
         self.scale = jft.LogNormalPrior(*scale, name="ps_template_scale")
@@ -1721,12 +1936,13 @@ class PowerSpectrumTemplate(jft.Model):
         return scale_realization * self.ps_template
 
 
-def get_peaks_from_cache(only_positives = True, sigma_thresh=2, custom_norm=1, power_spectrum=None, custom_path=None):
+def get_peaks_from_cache(mode=Literal["global mean threshold", "scipy", "rolling mean threshold"], only_positives = True, thresh=2,
+                         custom_norm=1, power_spectrum=None, custom_path=None, make_real_callable=lambda p: p.real):
     """
     Loads a saved xi_d file, detects peaks based on an ad-hoc threshhold and returns the position and amplitude of
     said peaks.
     :param only_positives:      bool,        Whether to report events at negative frequencies
-    :param sigma_thresh:        float,       Threshold in standard deviations
+    :param thresh:        float,       Threshold in standard deviations or prominence.
     :param custom_norm:         float,       Normalization factor, e.g. max(posterior_pipe_1_ps_mean). By default,
                                              max(amplitude of peak) = 1.
     :param custom_path:                      Path to a saved xi_d file
@@ -1734,10 +1950,11 @@ def get_peaks_from_cache(only_positives = True, sigma_thresh=2, custom_norm=1, p
     :return:
     """
     path = "pipe2_xi_cache.txt" if custom_path is None else custom_path
-
     obj = np.loadtxt(path, dtype=np.complex128)
 
-    xi, f = obj[:,0].real, obj[:,1].real
+    print(f"...Trying to search for positive peaks (True) and negative peaks ({not only_positives})")
+
+    xi, f = make_real_callable(obj[:,0]), obj[:,1].real
     if power_spectrum is None:
         power_spectrum = np.ones(len(f))
     if only_positives:
@@ -1746,21 +1963,181 @@ def get_peaks_from_cache(only_positives = True, sigma_thresh=2, custom_norm=1, p
         f = np.delete(f, to_del)
         ps = np.delete(power_spectrum, to_del)
 
-    adhoc_treshhold = sigma_thresh * np.mean(xi)
 
-    where_peaks_in_xi = np.where(xi > adhoc_treshhold)
+    if mode == "global mean threshold":
+        print("\tThis mode does not support finding negative peaks")
+        sigma_thresh = thresh
+        adhoc_treshhold = sigma_thresh * np.mean(xi)
+        print("\t\t...Finding peaks in xi larger than ", adhoc_treshhold)
+        where_peaks_in_xi = np.where(xi > adhoc_treshhold)
+    elif mode == "scipy":
+        print("\tI'm not sure if this mode supports finding negative peaks, I think so")
+        prom = thresh
+        where_peaks_in_xi, properties = find_peaks(xi, prominence=prom)
+    elif mode == "rolling mean threshold":
+        print("\tThis mode supports finding negative peaks")
+        window_length = 20  # Hz, window length
+        df = f[1]-f[0]
+        idx_half_length = int(window_length/2/df)
+        N = len(xi)
+        where_peaks_in_xi = []
+
+        for idx_position in range(idx_half_length, N-idx_half_length):
+            left_idx = idx_position - idx_half_length  # starts at 0 on the left
+            right_idx = idx_position + idx_half_length + 1  # and  2*idx_half_length + 1 on the right
+            # total size: right - left = 2*idx_half_length + 1
+            # ends at: N-idx_half_length - 1 - idx_half_length = N - 1 - 2*idx_half_length on the left
+            # and N - idx_half_length - 1 + idx_half_length + 1 = N
+            # total size: right - left = N - N + 1 + 2*idx_half_length = 2*idx_half_length + 1
+            xi_subslice = xi[left_idx:right_idx]
+
+            mean_sub_xi = np.mean(xi_subslice)
+            sig_sub_xi = np.std(xi_subslice)
+
+
+            sigma_threshhold_plus = mean_sub_xi + thresh * sig_sub_xi
+            sigma_threshhold_minus = mean_sub_xi - thresh * sig_sub_xi
+            # mean_threshhold = mean_sub_xi * thresh
+
+            if xi[idx_position] > sigma_threshhold_plus and xi[idx_position] == np.max(xi_subslice):
+                where_peaks_in_xi.append(idx_position)
+
+            if xi[idx_position] < sigma_threshhold_minus and xi[idx_position] == np.min(xi_subslice):
+                where_peaks_in_xi.append(idx_position)
+
+        where_peaks_in_xi = np.array(where_peaks_in_xi)
+
+    else:
+        raise ValueError("Mode must be 'constant' or 'rolling average'")
+
     peaks_k = f[where_peaks_in_xi]
-
-    ps_weights = ps[where_peaks_in_xi]
-    ps_weights_normed = ps_weights / max(ps_weights)
-
     amplitudes_k = xi[where_peaks_in_xi]
-    normed_amplitudes_k = amplitudes_k * custom_norm / max(amplitudes_k) * ps_weights_normed
+
+    if custom_norm:
+        ps_weights_normed = custom_norm
+    else:
+        # functional weights
+        ps_weights = ps[where_peaks_in_xi]
+        ps_weights_normed = ps_weights / max(ps_weights)
+
+    # normed_amplitudes_k = amplitudes_k / max(amplitudes_k) * ps_weights_normed
+    normed_amplitudes_k = amplitudes_k / max(amplitudes_k) * ps_weights_normed
 
     return peaks_k, normed_amplitudes_k
 
 
-def analyze_kl_callback(out_name, max_kl_iterations, lh, samples, vi_state):
+def get_peaks_from_cache_v2(local_sigma_threshold=3, global_sigma_threshold=3, window_length=20,
+                            take_abs_of_amplitudes=False, custom_amplitude_norm=1, custom_path=None,
+                            custom_xi_and_f=None):
+    """
+    Moving average sigma treshold detection: Checks whether the center of a 'window_length'-length window is above
+    or below average by mu ± sigma_threshold * local std.
+
+    If yes, the point is flagged as a candidate.
+    Condition for acceptance: non-gaussianity induced by peak sticking out.
+
+    The window is then moved by 1 pixel to the right.
+
+    :param local_sigma_threshold:     Sigma thresh for local sliding window
+    :param global_sigma_threshold:    Global thresh for very large peaks
+    :param window_length:       The physical window length in Hz.
+    :param custom_amplitude_norm:   Is multiplied onto the normed amplitudes
+    :param custom_xi_and_f:     A list of your custom xi and f.
+    :param custom_path:         If custom_xi_and_f is None, reads out xi and f information from file at this location
+    :return:
+    """
+    print(f"Searching search for positive and negative peaks in the real part of xi")
+
+    if custom_xi_and_f is None:
+        path = "pipe2_xi_cache.txt" if custom_path is None else custom_path
+        obj = np.loadtxt(path, dtype=np.complex128)
+        xi, f = (obj[:, 0]).real, obj[:, 1].real
+    else:
+        xi = custom_xi_and_f[0]
+        f = custom_xi_and_f[1]
+
+    power_spectrum = np.ones(len(f))
+    print("\tThis mode supports finding negative peaks")
+    window_length = 20  # Hz, window length
+    df = f[1] - f[0]
+    idx_half_length = int(window_length / 2 / df)
+    w = idx_half_length
+    N = len(xi)
+    where_peaks_in_xi = []
+
+    # Global peaks
+    sigma_threshhold_plus = np.mean(xi) + global_sigma_threshold * np.std(xi)
+    sigma_threshhold_minus = np.mean(xi) - global_sigma_threshold * np.std(xi)
+    for i, xi_value in enumerate(xi):
+        if xi_value > sigma_threshhold_plus:
+            where_peaks_in_xi.append(i)
+        if xi_value < sigma_threshhold_minus:
+            where_peaks_in_xi.append(i)
+
+
+    def gaussian_fraction_check(some_xi, tol=0.05):
+        # GPT, was too lazy
+        mean = np.mean(some_xi)
+        sigma = np.std(some_xi)
+        within_1sigma = np.sum((some_xi >= mean - sigma) & (some_xi <= mean + sigma)) / len(some_xi)
+        within_2sigma = np.sum((some_xi >= mean - 2 * sigma) & (some_xi <= mean + 2 * sigma)) / len(some_xi)
+        return (abs(within_1sigma - 0.68) < tol) and (abs(within_2sigma - 0.95) < tol)
+
+
+    # Local sliding average peaks
+    for i in range(w, N - w):
+        left_idx = i - w  # starts at 0 on the left
+        right_idx = i + w + 1  # and  2*idx_half_length + 1 on the right
+        # total size: right - left = 2*idx_half_length + 1
+        # ends at: N-idx_half_length - 1 - idx_half_length = N - 1 - 2*idx_half_length on the left
+        # and N - idx_half_length - 1 + idx_half_length + 1 = N
+        # total size: right - left = N - N + 1 + 2*idx_half_length = 2*idx_half_length + 1
+        xi_subslice = xi[left_idx:right_idx]
+        f_subslice = f[left_idx:right_idx]  # for debugging
+
+        mean_sub_xi = np.mean(xi_subslice)
+        sig_sub_xi = np.std(xi_subslice)
+
+        sigma_threshhold_plus = mean_sub_xi + local_sigma_threshold * sig_sub_xi
+        sigma_threshhold_minus = mean_sub_xi - local_sigma_threshold * sig_sub_xi
+
+        if xi[i] > sigma_threshhold_plus and xi[i] == np.max(xi_subslice) and not gaussian_fraction_check(xi_subslice):
+            where_peaks_in_xi.append(i)
+
+        if xi[i] < sigma_threshhold_minus and xi[i] == np.min(xi_subslice) and not gaussian_fraction_check(xi_subslice):
+            where_peaks_in_xi.append(i)
+
+        # debug_idx = jnp.argmin(jnp.abs(f-650))
+        # if i == debug_idx:
+        #     print("Debugging get_peaks_from_cache_v2")
+
+
+    where_peaks_in_xi = np.array(where_peaks_in_xi)
+    peaks_k = f[where_peaks_in_xi]
+    amplitudes_k = xi[where_peaks_in_xi]
+
+    if take_abs_of_amplitudes:
+        amplitudes_k=jnp.abs(amplitudes_k)
+
+    normed_amplitudes_k = amplitudes_k / max(amplitudes_k) * custom_amplitude_norm
+    return peaks_k, normed_amplitudes_k
+
+
+def mean_red_chi2(data, d_th_samples, N_inv_op):
+        """
+        :param data:            The data array
+        :param d_th_samples:    A list of arrays representing forward model calls of posterior latent samples.
+        :param N_inv_op:        The inverse noise operator
+        :return:
+        """
+        d = data
+        N = len(d)
+        res_list = [d - d_th for d_th in d_th_samples]
+        red_chi2_samples = [res.T @ N_inv_op(res) / N for res in res_list]
+        return np.mean(red_chi2_samples)
+
+
+def analyze_kl_callback(out_name, max_kl_iterations, lh, samples, vi_state, ps_op=None):
 
     ### KL ENERGY CALCULATION
 
@@ -1794,13 +2171,21 @@ def analyze_kl_callback(out_name, max_kl_iterations, lh, samples, vi_state):
 
     gs = lh.likelihood
     d = gs.data
-    N_inv = gs.noise_cov_inv
     fw_model = lh.forward
-    d_th_samples = jnp.array([fw_model(xi) for xi in samples])
+    try:
+        # Gaussian energy
+        N_inv = gs.noise_cov_inv
+        d_th_samples = jnp.array([fw_model(xi) for xi in samples])
+    except AttributeError:
+        # Variable Gaussian covariance energy => I attach the noise_cov_inv myself
+        N_inv = lh.noise_cov_inv
+        mean_inv_noise_level = jft.mean([N_inv(xi) for xi in samples])
+        N_inv = lambda x: x*mean_inv_noise_level
+        d_th_samples = jnp.array([fw_model(xi)[0] for xi in samples])  # fw_model(xi) is a tuple with [0] being s_prime(x) and
+        # the second entry I think an array consisting of sqrt_inv_noise_cov
+
+    red_chi2 = mean_red_chi2(data=d, d_th_samples=d_th_samples, N_inv_op=N_inv)
     d_th_mean = jnp.mean(d_th_samples, axis=0)
-    res = d_th_mean - d
-    chi2 = res.T @ N_inv(res)
-    red_chi2 = chi2 / len(d)
 
     with open(red_chi2_file, "a") as f:
         f.write(str(red_chi2))
@@ -1816,15 +2201,43 @@ def analyze_kl_callback(out_name, max_kl_iterations, lh, samples, vi_state):
         plt.close()
 
 
-    ### FW MODEL CALCULATION
+    ### FW MODEL CALCULATION AND POWER SPECTRUM CALCULATION
 
     fw_model_folder = p + "/fw_model/"
     os.makedirs(fw_model_folder, exist_ok=True)
 
-    plt.plot(d_th_mean)
-    usual_plot(xl="Index", yl="Value", title="Mean forward model evaluation", show=False, close=False)
-    plt.savefig(fw_model_folder+f"iter_{kl_iteration_number}.png", dpi=100)
-    plt.close()
+    if not ps_op:
+        plt.plot(d_th_mean)
+        usual_plot(xl="Index", yl="Value", title="Mean forward model evaluation", show=False, close=False)
+        plt.savefig(fw_model_folder+f"iter_{kl_iteration_number}.png", dpi=100)
+    else:
+        ps_mean, ps_std = jft.mean_and_std(
+            tuple(ps_op(xi) for xi in samples)
+        )
+
+        fig, axs = plt.subplots(nrows=1, ncols=2)
+        fig.suptitle("Mean forward model evaluation")
+
+        axs[0].plot(d_th_mean, label="Mean data")
+        axs[0].set_xlabel("Index")
+        axs[0].set_ylabel("Data value")
+
+        axs[1].plot(
+            ps_mean,
+            label="Mean power spectrum",
+        )
+        axs[1].set_xlabel("Index")
+        axs[1].set_ylabel("Power")
+        axs[1].set_xscale("log")
+        axs[1].set_yscale("log")
+
+        axs[0].legend()
+        axs[1].legend()
+
+        plt.tight_layout()
+        plt.savefig(fw_model_folder+f"iter_{kl_iteration_number}.png", dpi=100)
+        plt.close()
+
 
     ### MEAN LATENT VARIABLE CALCULATION
 
@@ -2090,6 +2503,7 @@ def plot_histogram(key, mean: float, sigma: float, n_samples: int, mode="Lognorm
              histtype='step', facecolor='white', color="black")
 
     plt.show()
+    return key
 
 
 from gwpy.timeseries import TimeSeries
@@ -2193,3 +2607,26 @@ def solve_data_equation_for_xi(data, ps):
     data_tilde = jnp.fft.fft(data)
     amp = jnp.sqrt(ps)
     return data_tilde / amp
+
+
+def create_cfm(time_domain, prefix, offset_std, offset_mean, fluct, llslope, flex=None):
+    """
+
+    :param time_domain:   To speed up the solving of the differential equation, when using an adaptive step size
+                                solver, the times may be chosen quite coarse in order to not force very small steps. Further,
+                                since the adaptive step size method may require evaluation in between the support points, a
+                                linear interpolator must be used at some point.
+    :param prefix:              The model prefix.
+    :param offset_std:
+    :param fluct:
+    :param llslope:
+    :return:
+    """
+    N = len(time_domain)
+    dt = time_domain[1] - time_domain[0]
+    cfm_maker = jft.CorrelatedFieldMaker(prefix=prefix)
+    cfm_maker.set_amplitude_total_offset(offset_mean=offset_mean, offset_std=offset_std)
+    cfm_maker.add_fluctuations(shape=N, distances=dt, fluctuations=fluct, loglogavgslope=llslope,
+                               flexibility=flex, non_parametric_kind="power", harmonic_type="fourier")
+    correlated_field = cfm_maker.finalize()
+    return correlated_field

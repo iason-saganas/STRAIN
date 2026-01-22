@@ -150,7 +150,7 @@ class AutoDiffEquationSolver(jft.Model):
 
 
     def get_model_components(self):
-        return None, None, self.prefix
+        return lambda x: jnp.nan, {"none" : 1}, self.prefix
 
 
 class DomainCheckAndMask():

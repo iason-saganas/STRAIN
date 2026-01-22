@@ -1,7 +1,5 @@
 from _01_get_smooth_baseline_ps import *
-from nifty.nifty.re.conjugate_gradient import static_cg
 from useful.calculate_pseudoinverse import find_penrose_moore_solution, sample_from_ps
-
 
 data_grid = pipe_1.d_dom_real
 harmonic_signal_grid = pipe_1.s_dom_harmonic
@@ -11,8 +9,6 @@ signal_distributor = harmonic_signal_grid.power_distributor
 
 posterior_pipe_1_ps_mean_std, _, _ = pipe_1.get_posterior_statistics()
 posterior_pipe_1_ps_mean = (posterior_pipe_1_ps_mean_std[0])[signal_distributor]
-N = pipe_1.n_ds
-M = pipe_1.n_ss
 
 # pipe_3_xi_s = d_tilde / np.sqrt(posterior_pipe_1_ps_mean)
 
@@ -20,21 +16,25 @@ M = pipe_1.n_ss
 # plt.show()
 
 
-penrose_xi = find_penrose_moore_solution(pipe=pipe_1, itr=10_000)
+penrose_xi = find_penrose_moore_solution(pipe=pipe_1, itr=100_000, reload_from_cache=True)
 
-peaks_k, norm_amplitudes_k = get_peaks_from_cache(sigma_thresh=4, power_spectrum=posterior_pipe_1_ps_mean)
+peaks_k, norm_amplitudes_k = get_peaks_from_cache_v2(local_sigma_threshold=3, global_sigma_threshold=2, window_length=20,
+                                                     take_abs_of_amplitudes=True)
 
 # Plot of penrose_xi and its 2 sigma peaks
 plt.plot(pipe_1.k_signal_full, penrose_xi.real, color=red)
-# plt.plot(peaks_k, [200]*len(peaks_k), "r.", markersize=5)
+plt.plot(peaks_k, [0.1*max(penrose_xi.real)]*len(peaks_k), "b.", markersize=5)
+
 usual_plot(xl="Frequency $f$", yl="Arbitrary units", title=r"$\tilde{\xi}_d^{\ast}$")
 
 # Plot of smooth background together with found peaks
 where_positive = np.where(pipe_1.k_signal_full>0)
+
 plt.plot(pipe_1.k_signal_full[where_positive], posterior_pipe_1_ps_mean[where_positive],
          color=blue, label=r"Smooth background $p_n(f)$")
 plt.plot(peaks_k, norm_amplitudes_k, color=red, marker="v", markersize=5, linewidth=0,
          label=r"Peaks found in $\tilde{\xi}_d^{\ast}$")
+
 plot_welch_averaged_ps()
 plt.loglog()
 usual_plot(xl="Frequency $f$", yl="Power")
@@ -48,6 +48,6 @@ posterior_penrose_data = sample_from_ps(penrose_xi, N=pipe_1.n_ds, inverse_h_tra
 tmp = np.where((time>15.1) & (time<16.75))
 plt.plot(time[tmp], pipe_1.d[tmp], label=r"$d_{\mathrm{obs}}$", color="orange")
 plt.plot(time[tmp], posterior_penrose_data.real[tmp], color=blue, label=r"Data from smooth $p_n(f)$ and $\tilde{\xi}_d^{\ast}$")
-usual_plot(save_fig=True)
+usual_plot(save_fig=False)
 
 

@@ -1,3 +1,5 @@
+import os
+
 import jax.numpy as jnp
 import numpy as np
 from nifty.nifty.re.conjugate_gradient import static_cg
@@ -69,7 +71,7 @@ def pseudo_inverse(A, A_T, b, itr=10_000):
     return xi
 
 
-def find_penrose_moore_solution(itr, pipe,  reload_from_cache=True, filename="pipe2_xi_cache.txt"):
+def find_penrose_moore_solution(itr, pipe, reload_from_cache=True, filename="pipe2_xi_cache.txt"):
     """
     :param itr:                     The number of iterations to allow in the CGM.
     :param pipe:                    An instance of the InferenceSchemeRe class containing the data power spectrum
@@ -102,10 +104,13 @@ def find_penrose_moore_solution(itr, pipe,  reload_from_cache=True, filename="pi
 
     xi = pseudo_inverse(itr=itr, A=A, A_T=A_T, b=d)
 
-    if reload_from_cache:
-
-        to_save = np.column_stack((xi, pipe.k_signal_full))
-        np.savetxt(filename, to_save)
+    print(f"Saving new xi peaks file under the name <{filename}>")
+    to_save = np.column_stack((xi, pipe.k_signal_full))
+    # Make the parent directory if it doesn't exist
+    dir_ = os.path.dirname(filename)  # Guard against empty directory names
+    if dir_:
+        os.makedirs(dir_, exist_ok=True)
+    np.savetxt(filename, to_save)
 
     return xi
 
