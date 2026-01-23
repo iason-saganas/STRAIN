@@ -51,11 +51,11 @@ def _02_get_location_of_spikes_from_xi(pipe:InferenceSchemeRe, output_folder:str
 
         # Plot of smooth background together with found peaks
         where_positive = np.where(pipe.k_signal_full>0)
+        plot_welch_averaged_ps()
         plt.plot(pipe.k_signal_full[where_positive], posterior_pipe_ps_mean[where_positive],
                  color=blue, label=r"Smooth background $p_n(f)$")
         plt.plot(peaks_k, norm_amplitudes_k, color=red, marker="v", markersize=5, linewidth=0,
                  label=r"Peaks found in $\tilde{\xi}_d$")
-        plot_welch_averaged_ps()
         plt.loglog()
         usual_plot(xl="Frequency $f$", yl="Power", show=False, save_fig=True, close=True,
                    save_path=output_folder+"/power_spectrum_with_peaks",)

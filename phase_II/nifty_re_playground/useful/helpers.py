@@ -289,7 +289,7 @@ class InferenceSchemeRe():
 
     def add_cfm_signal_model(self, fluct:tuple, llslope:tuple, flex:tuple | None = None, asper:tuple | None=None,
                              offset_mean:float = 0, offset_std:tuple = (1e-16, 1e-16), model_prefix="s_",
-                             add_power_spectrum_template=None, add_custom_power_ops=(None,), square_iwp=False,
+                             add_power_spectrum_template=None, add_peak_model=None, square_iwp=False,
                              add_cfm_env=False, apply_tukey_window=True):
         """
 
@@ -304,27 +304,28 @@ class InferenceSchemeRe():
                                                     power spectrum of the correlated field. DON'T USE IN NEW CODE, ONLY
                                                     FOR BACKWARDS-COMPATIBILITY; INSTEAD PASS A LIST OF OPERATORS VIA
                                                     add_custom_power_ops.
-        :param add_custom_power_ops:                 A list of custom operators in power space to be added to the model,
-                                                    e.g. a line model for spectral lines in the power spectrum.
+        :param add_peak_model:                      A peak model in power space to be added to the model.
 
         :return:
         """
+        from .custom_correlated_field import CustomCorrelatedFieldMaker
 
-        cfm_maker = jft.CorrelatedFieldMaker(prefix=model_prefix)
+        cfm_maker = CustomCorrelatedFieldMaker(prefix=model_prefix)
+        # cfm_maker = jft.CorrelatedFieldMaker(prefix=model_prefix)
+
         cfm_maker.set_amplitude_total_offset(offset_mean, offset_std)
         cfm_maker.add_fluctuations(shape=(self.n_ss,), distances=self.dist_ss, fluctuations=fluct,
                                    loglogavgslope=llslope, flexibility=flex, asperity=asper, harmonic_type="fourier",
-                                   non_parametric_kind="power", hack_add_power_spectrum_template=add_power_spectrum_template,
-                                   hack_custom_amplitude_operators=add_custom_power_ops,
-                                   hack_make_iwp_pos_definite=square_iwp)
+                                   non_parametric_kind="power", power_spectrum_template=add_power_spectrum_template,
+                                   peak_model=add_peak_model,  make_iwp_pos_definite=square_iwp)
 
         parameter_choices = {
             f"{model_prefix}fluctuations": lambda xi: np.exp(fluct[0] + xi*fluct[1]),
             f"{model_prefix}loglogavgslope": lambda xi: llslope[0] + xi*llslope[1],
             f"{model_prefix}flexibility": lambda xi: np.exp(flex[0] + xi*flex[1]),
             f"{model_prefix}asperity": lambda xi: np.exp(asper[0] + xi*asper[1]),
-            #"offset_mean": (offset_mean, "fix"),
-            #"offset_std": (offset_std, "lognormal"),
+        #     #"offset_mean": (offset_mean, "fix"),
+        #     "offset_std": (offset_std, "lognormal"),
         }
 
 
@@ -1206,7 +1207,7 @@ class InferenceSchemeRe():
 
 
     def calculate_and_plot_penrose_xi(self, itr=10_000, plot=True):
-        penrose_xi = find_penrose_moore_solution(itr, pipe=self, reload_from_cache=True, filename="my_penrose_xi.txt")
+        penrose_xi = find_penrose_moore_solution(itr, pipe=self, reload_from_cache=False, filename="my_penrose_xi.txt")
         if plot:
 
             mean_ps = self.get_posterior_statistics(moment="mean", quantity="power spectrum full")
@@ -1826,8 +1827,8 @@ class NormedGaussianComb(jft.Model):
                  rel_sigma_widths=.1,
                  a_priori_width_of_peaks = 10,
 
-                 abs_width_sigma=1,
-                 abs_amp_sigma=1,
+                 abs_width_sigma=None,
+                 abs_amp_sigma=None,
 
                  vary_positions=False,
 
@@ -1850,6 +1851,10 @@ class NormedGaussianComb(jft.Model):
         :param a_priori_width_of_peaks: In Hz.
         :param vary_positions:          Whether to set a normal prior on the peak positions with some internally set
                                         variance.
+        :param abs_width_sigma:         The absolute standard deviation of the width. TAKES PRECEDENCE over
+                                        rel_sigma_widths
+        :param abs_amp_sigma:           The absolute standard deviation of the amplitude. TAKES PRECEDENCE over
+                                        rel_sigma_widths
         :param norm:                    If false, skips the normalization (not recommended).
         """
 
@@ -1885,7 +1890,7 @@ class NormedGaussianComb(jft.Model):
             total_domain =  self.xi_g_amp.domain | self.xi_g_width.domain
 
         def single_gaussian(amp, width, pos):
-            return amp**2 * jnp.exp(-0.5 * ((self.f - pos) / width) ** 2)
+            return amp * jnp.exp(-0.5 * ((self.f - pos) / width) ** 2)
 
         self.sg = single_gaussian
         self.normalize = lambda x, y: y / jnp.trapezoid(y=y, x=x) if norm else lambda x, y: y
@@ -1907,6 +1912,8 @@ class NormedGaussianComb(jft.Model):
         :param xi:
         :return:
         """
+        raise ValueError("If you use custom correlated field, the signature of the call inside non-parametric amplitude "
+                         "will most likely not match this call")
         amplitude_vector = self.xi_g_amp(xi)
         width_vector = self.xi_g_width(xi)
         position_vector = self.xi_g_pos_vary_or_cst(xi)
@@ -1916,6 +1923,132 @@ class NormedGaussianComb(jft.Model):
         gc = jnp.sum(gaussians, axis=0)
         # norm = jnp.trapezoid(y=gc, x=self.f)
         return self.normalize(y=gc, x=self.f)
+
+
+class BaselineNormedGaussianComb(jft.Model):
+    def __init__(self,
+                 list_of_amplitudes_above_baseline:jnp.array,
+                 list_of_peaks:jnp.array,
+                 unique_k_lengths:jnp.array,
+
+                 rel_sigma_amp = .1,
+                 rel_sigma_widths=.1,
+                 a_priori_width_of_peaks = 10,
+
+                 abs_width_sigma=None,
+                 abs_amp_sigma=None,
+
+                 norm=True
+                 ):
+        """
+
+        Same as NormedGaussianComb but: the physical height of peak_i is multiplied with the current power spectrum
+        value at the nearest frequency to k_i before all peaks are summed and normalized.
+
+        Therefore, list_of_amplitudes_above_baseline needs to contain amplitudes in orders of magnitude above the
+        current baseline power spectrum, BEFORE normalization (complicates intuition a bit).
+
+        For example, if a_100 is set to 1e2 and ps_100 is 1e-9, the physical peak height is 1e-7, which is two orders
+        of magnitude above baseline, contrary to the 11 orders of magnitude difference you would get if you set
+        a_100 is the peak height directly. This is to allow the baseline to increase itself, instead of high power at
+        large k being explained only by very high peaks.
+
+        Further, if a_100 < 1, the peak drowns under the baseline, which is more desirable than the latent parameter
+        going to -np.inf.
+
+
+        :param unique_k_lengths:        The unique frequencies, the operator is built in amplitude space.
+        :param list_of_peaks:           Array of peak positions (frequencies)
+        :param list_of_amplitudes_above_baseline:
+                                        Array of relative peak amplitudes (power units). Physical peak amplitudes
+                                        will be list_of_amplitudes_above_baseline * power_spectrum.
+        :param rel_sigma_amp:           The relative standard deviation set on the lognormal amplitude prior
+        :param rel_sigma_widths:        The relative standard deviation set on the lognormal frequency width prior
+        :param a_priori_width_of_peaks: In Hz.
+        :param abs_width_sigma:         The absolute standard deviation of the width. TAKES PRECEDENCE over
+                                        rel_sigma_widths
+        :param abs_amp_sigma:           The absolute standard deviation of the amplitude. TAKES PRECEDENCE over
+                                        rel_sigma_widths
+        :param norm:                    If false, skips the normalization (not recommended).
+        """
+
+        self.f = unique_k_lengths
+        self.N = len(list_of_peaks)
+        self.frequency_widths = a_priori_width_of_peaks * jnp.ones(self.N)
+        self.positions = list_of_peaks
+
+        if not abs_width_sigma:
+            self.sigma_widths = rel_sigma_widths * self.frequency_widths
+        else:
+            self.sigma_widths = abs_width_sigma
+
+        if not abs_amp_sigma:
+            self.sigma_amp = rel_sigma_amp * list_of_amplitudes_above_baseline
+        else:
+            self.sigma_amp = abs_amp_sigma
+
+        self.xi_g_amp = jft.LogNormalPrior(mean=list_of_amplitudes_above_baseline, std=self.sigma_amp, name="xi_g_amp",
+                                           dtype=jnp.float64, shape=(self.N,))
+
+        self.xi_g_width = jft.LogNormalPrior(mean=self.frequency_widths, std=self.sigma_widths, name="xi_g_width",
+                                             dtype=jnp.float64, shape=(self.N,))
+
+        def single_gaussian(amp, width, pos):
+            return amp * jnp.exp(-0.5 * ((self.f - pos) / width) ** 2)
+
+        self.sg = single_gaussian
+        if norm:
+            self.normalize = lambda x, y: y / jnp.trapezoid(y=y, x=x)
+        else:
+            self.normalize = lambda x, y: y
+
+        super().__init__(domain=self.xi_g_amp.domain | self.xi_g_width.domain)
+
+    def __call__(self, xi):
+        """
+        Logic:
+
+            gaussians = []
+            for freq_center, amp, freq_width:
+
+                    gaussian = amp * np.exp(-0.5 * ((f - freq_center) / freq_width) ** 2)
+                    gaussians.append(gaussian)
+
+            gaussian_comb = np.sum(gaussians, axis=0)
+
+        :param xi:
+        :return:
+        """
+        amplitude_vector = self.xi_g_amp(xi)
+        width_vector = self.xi_g_width(xi)
+        position_vector = self.positions
+        return [amplitude_vector, width_vector, position_vector]
+
+    def finalize(self, peak_information, ps, ps_k_values):
+        # Signature needs to match npa of custom correlated field!
+        unweighted_amplitudes, widths, positions = peak_information
+        extracted_weights = self.extract_weights(ps=ps, ps_k_values=ps_k_values)
+        weighted_amplitudes = unweighted_amplitudes * extracted_weights
+
+        # jax.debug.print("position, height before, ps, height after: {x}", x=[positions[0], unweighted_amplitudes[0],
+        #                 extracted_weights[0], weighted_amplitudes[0]])
+
+        weighted_gaussians = vmap(self.sg)(weighted_amplitudes, widths, positions)
+
+        # jax.debug.print("max = amplitude = {x}", x=jnp.max(weighted_gaussians[0]))
+        # jax.debug.print("expected height: {x}", x=weighted_amplitudes[0])
+
+        gc = jnp.sum(weighted_gaussians, axis=0)
+        return self.normalize(y=gc, x=self.f)
+
+    def extract_weights(self, ps, ps_k_values):
+        # Please unit test some time
+        def weight_for_k(k):
+            idx = jnp.argmin(jnp.abs(ps_k_values - k))
+            return ps[idx]
+
+        # Vectorize over all positions
+        return vmap(weight_for_k)(self.positions)
 
 
 class ScaledPowerSpectrumTemplate(jft.Model):
