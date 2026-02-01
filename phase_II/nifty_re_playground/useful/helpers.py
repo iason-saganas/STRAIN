@@ -1,24 +1,18 @@
-from functools import partial
-
 from scipy.signal.windows import tukey
 from scipy.interpolate import interp1d
-from data.style_components.matplotlib_style import *
 import numpy as np
 import jax.numpy as jnp
 import pickle
-import matplotlib.pyplot as plt
 import nifty.nifty.re as jft
 import jax
 import warnings
 from typing import Literal, Optional, Callable
 from time import time
 from jax import vmap
-from scipy.ndimage import gaussian_filter
 from scipy.signal import find_peaks
 import os
 from .calculate_kl import calculate_kl_val_and_grad, get_beneficial_position
 from .calculate_pseudoinverse import find_penrose_moore_solution, sample_from_ps
-import datetime
 from scipy.ndimage import gaussian_filter, median_filter, uniform_filter
 from skimage.restoration import denoise_tv_chambolle
 import cv2
@@ -895,7 +889,7 @@ class InferenceSchemeRe():
             label=r"1$\sigma$ region",
         )
 
-        usual_plot(xl=xl, yl=yl, title=f"Prior: {mode}")
+        thesis_plot(xl=xl, yl=yl, title=f"Prior: {mode}")
 
 
     def plot_prior_samples(self, mode:Literal["signal", "signal response", "power spectrum",
@@ -955,7 +949,7 @@ class InferenceSchemeRe():
                     plt.loglog()
                 if plot_data:
                     plt.plot(self.t_ds, self.d, label="data", color="orange")
-                usual_plot(xl=xl, yl=yl, title=f"Prior samples: {mode}")
+                thesis_plot(xl=xl, yl=yl, title=f"Prior samples: {mode}")
 
 
         if not rolling:
@@ -965,7 +959,7 @@ class InferenceSchemeRe():
                 plt.loglog()
             if plot_data:
                 plt.plot(self.t_ds, self.d, label="data", color="orange")
-            usual_plot(xl=xl, yl=yl, title=f"Prior samples: {mode}", show=True, close=True)
+            thesis_plot(xl=xl, yl=yl, title=f"Prior samples: {mode}", show=True, close=True)
 
 
     def _plot_power_spectrum_and_sample(self, plot_welch_average):
@@ -1053,7 +1047,7 @@ class InferenceSchemeRe():
             plt.plot(nrt_time_values[:go_until], nrt_strain_values[:go_until], label="LIGO Template",
                      color=red)
 
-        usual_plot(**kwargs)
+        thesis_plot(**kwargs)
 
 
 
@@ -1104,7 +1098,7 @@ class InferenceSchemeRe():
 
         # plt.ylim(-3e-9, 1.4e-7)
         plt.loglog()
-        usual_plot(xl="Frequency $f$", yl="Power", **kwargs)
+        thesis_plot(xl="Frequency $f$", yl="Power", **kwargs)
 
 
     def plot_posterior_harmonic_xi_s(self, multiply_with_posterior_amp_spec=False,
@@ -1150,7 +1144,7 @@ class InferenceSchemeRe():
             plt.plot(self.k_signal_full, amp_exp, ".",label=r"Posterior $\sqrt{p(k)}$", markersize=4)
             plt.loglog()
 
-            usual_plot(xl="Frequency $f$", yl=r"$\sqrt{\mathrm{power}}$")
+            thesis_plot(xl="Frequency $f$", yl=r"$\sqrt{\mathrm{power}}$")
 
         elif multiply_with_posterior_amp_spec_v2:
 
@@ -1175,11 +1169,11 @@ class InferenceSchemeRe():
             plt.plot(self.k_signal_full, ps_mean, ".", label=r"Posterior $p(k)$", markersize=4)
             plt.loglog()
 
-            usual_plot(xl="Frequency $f$", yl=r"$\mathrm{power}$")
+            thesis_plot(xl="Frequency $f$", yl=r"$\mathrm{power}$")
 
         else:
             plt.plot(self.k_signal_full, posterior_xi_s_mean, "r-", label=r"Posterior mean")
-            usual_plot(xl="Frequency $f$", yl=r"$\xi_s$")
+            thesis_plot(xl="Frequency $f$", yl=r"$\xi_s$")
 
 
     def plot_noise_sample_with_data(self, num, rolling=False, show=True):
@@ -1199,11 +1193,11 @@ class InferenceSchemeRe():
                 plt.plot(self.t_ds, sl)
                 if rolling:
                     plt.plot(self.t_ds, self.d, label="Actual data")
-                    usual_plot(close=True, title="Noise samples from covariance operator")
+                    thesis_plot(close=True, title="Noise samples from covariance operator")
 
         if not rolling and show:
             plt.plot(self.t_ds, self.d, label="Actual data", color="black")
-            usual_plot()
+            thesis_plot()
 
 
     def calculate_and_plot_penrose_xi(self, itr=10_000, plot=True):
@@ -2763,3 +2757,5 @@ def create_cfm(time_domain, prefix, offset_std, offset_mean, fluct, llslope, fle
                                flexibility=flex, non_parametric_kind="power", harmonic_type="fourier")
     correlated_field = cfm_maker.finalize()
     return correlated_field
+
+from data.style_components.matplotlib_style import *
