@@ -1,8 +1,8 @@
 from phase_II.nifty_re_playground.useful.helpers import *
-from phase_II.nifty_re_playground.useful.helpers import bw_hartley, convert_gps_to_seconds
+from phase_II.nifty_re_playground.useful.helpers import convert_gps_to_seconds
 from phase_II.utils.helpers import whiten, bandpass
 jax.config.update("jax_enable_x64", True)
-from useful.welch_average import calculate_welch_average
+from phase_II.nifty_re_playground.useful.basics.welch_average import calculate_welch_average
 
 save_results_path = "/Users/iason/PycharmProjects/STRAIN/phase_II/gw_search_results/"
 off_center = 1.5

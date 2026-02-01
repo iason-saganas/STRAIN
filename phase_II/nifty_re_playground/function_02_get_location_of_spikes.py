@@ -1,4 +1,4 @@
-from useful.calculate_pseudoinverse import find_penrose_moore_solution, sample_from_ps
+from phase_II.nifty_re_playground.useful.math.calculate_pseudoinverse import find_penrose_moore_solution, sample_from_ps
 from phase_II.nifty_re_playground.useful.helpers import *
 
 def _02_get_location_of_spikes_from_xi(pipe:InferenceSchemeRe, output_folder:str, harmonic_xi:jnp.array=None,

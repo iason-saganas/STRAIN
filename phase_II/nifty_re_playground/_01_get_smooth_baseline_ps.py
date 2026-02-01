@@ -1,4 +1,7 @@
-from phase_II.nifty_re_playground.useful.helpers import *
+from strain_tools import *
+import matplotlib.pyplot as plt
+import jax
+
 jax.config.update("jax_enable_x64", True)
 key = jax.random.key(42)
 

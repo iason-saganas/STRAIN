@@ -8,6 +8,8 @@ import operator
 from jax.numpy import fft
 
 
+__all__ = ["pseudo_inverse", "find_penrose_moore_solution", "sample_from_ps", "sample_from_ps_transpose"]
+
 def hartley(p, signal_grid):
     tmp = fft.fftn(p, axes=None)
     add = operator.add

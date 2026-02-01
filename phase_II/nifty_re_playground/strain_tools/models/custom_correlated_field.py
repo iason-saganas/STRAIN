@@ -7,6 +7,7 @@ from typing import Callable, Optional, Tuple, Union
 
 import numpy as np
 from jax import numpy as jnp, vmap
+import nifty.nifty.re as jft
 
 from nifty.nifty.config import _config
 
@@ -16,6 +17,31 @@ from nifty.nifty.re.misc import wrap
 from nifty.nifty.re.model import Model, WrappedCall
 from nifty.nifty.re.num import lognormal_prior, normal_prior
 from nifty.nifty.re.tree_math import ShapeWithDtype, random_like
+
+
+__all__ = ["create_cfm", "CustomCorrelatedFieldMaker"]
+
+def create_cfm(time_domain, prefix, offset_std, offset_mean, fluct, llslope, flex=None):
+    """
+
+    :param time_domain:   To speed up the solving of the differential equation, when using an adaptive step size
+                                solver, the times may be chosen quite coarse in order to not force very small steps. Further,
+                                since the adaptive step size method may require evaluation in between the support points, a
+                                linear interpolator must be used at some point.
+    :param prefix:              The model prefix.
+    :param offset_std:
+    :param fluct:
+    :param llslope:
+    :return:
+    """
+    N = len(time_domain)
+    dt = time_domain[1] - time_domain[0]
+    cfm_maker = jft.CorrelatedFieldMaker(prefix=prefix)
+    cfm_maker.set_amplitude_total_offset(offset_mean=offset_mean, offset_std=offset_std)
+    cfm_maker.add_fluctuations(shape=N, distances=dt, fluctuations=fluct, loglogavgslope=llslope,
+                               flexibility=flex, non_parametric_kind="power", harmonic_type="fourier")
+    correlated_field = cfm_maker.finalize()
+    return correlated_field
 
 
 def hartley(p, axes=None):
@@ -424,7 +450,7 @@ class NonParametricAmplitude(Model):
         interferometry`, Arras, Philipp and Frank, Philipp and Haim, Philipp
         and Knollmüller, Jakob and Leike, Reimar and Reinecke, Martin and
         Enßlin, Torsten, `<https://arxiv.org/abs/2002.05218>`_
-        `<http://dx.doi.org/10.1038/s41550-021-01548-0>`_
+        `<https://dx.doi.org/10.1038/s41550-021-01548-0>`_
 
         :param power_spectrum_template: jnp.array  | None,  A fixed template to add to the power spectrum.
         :param peak_model: jft.Model | None,                A peak model, e.g. a Gaussian Comb. If this model is
@@ -682,7 +708,7 @@ class CustomCorrelatedFieldMaker:
         interferometry`, Arras, Philipp and Frank, Philipp and Haim, Philipp
         and Knollmüller, Jakob and Leike, Reimar and Reinecke, Martin and
         Enßlin, Torsten, `<https://arxiv.org/abs/2002.05218>`_
-        `<http://dx.doi.org/10.1038/s41550-021-01548-0>`_
+        `<https://dx.doi.org/10.1038/s41550-021-01548-0>`_
         """
         grid = make_grid(shape, distances, harmonic_type)
 
@@ -745,7 +771,7 @@ class CustomCorrelatedFieldMaker:
 
         The Matérn-kernel spectrum is parametrized by
 
-        .. math ::
+        . math :
             A(k) = \\frac{a}{\\left(1 + { \
                 \\left(\\frac{|k|}{b}\\right) \
             }^2\\right)^{-c/4}}

@@ -2,68 +2,51 @@ import jax.numpy as jnp
 from scipy.signal.windows import tukey
 import matplotlib.pyplot as plt
 from matplotlib.patches import Rectangle
-import datetime
 
-def usual_plot(xl=r"Time $t$ $\mathrm{[sec]}$", yl=r"Strain $h$ $\mathrm{[10^{-19}]}$", title=None, xlim=None, ylim=None,
-               show=True, close=False, save_fig=False):
-    plt.xlabel(xl, fontsize=20)
-    plt.ylabel(yl, fontsize=20)
-    plt.title(title, fontsize=25)
-    ax = plt.gca()
-    labels = ax.get_legend_handles_labels()
-    plt.xlim(xlim)
-    plt.ylim(ylim)
-    if labels != ([], []):
-        plt.legend()
-    if save_fig:
-        plt.tight_layout()
-        current_date = datetime.datetime.now()
-        plt.savefig(f"{current_date}.png")
-    if show:
-        plt.show()
-    if close:
-        plt.close()
+from .common_utils import fw_hartley
+from .plotting import usual_plot
 
+__all__ = ["calculate_welch_average"]
 
-def fw_hartley(x, norm="ortho"):
-    r"""
-    If ortho, preserves scaling of input. I.e.
-
-        jnp.var(fw_hartley(\xi)) = jnp.var(\xi) if e.g. \xi is iid.
-
-    :param x:
-    :param norm:
-    :return:
-    """
-    N = len(x)
-    Xf = jnp.fft.fft(x)  # Accumulates √N of intrinsic scaling
-    Hx = Xf.real - Xf.imag  # standard Hartley: cos+sin → real - imag
-    if norm == "ortho":
-        Hx = Hx / jnp.sqrt(N)  #  scales with 1/√N
-    return Hx  # total scale: 1 if ortho, else √N
-
-
-def bw_hartley(Hx, norm="ortho"):
-    r"""
-    This is unitary if ortho norm i.e.
-
-            xi = jnp.random.standard_normal(8193)
-            v = bw_hartley(xi)
-
-            v.T @ v ==  xi.T @ xi
-
-    :param Hx:
-    :param norm:
-    :return:
-    """
-    # Hartley is its own inverse! Note: H(H(x)) = N for not-normalized Hartley H.
-    # Further, Hx = fw_ortho_hartley(x) ~ 1.
-    N = len(Hx)
-    x = fw_hartley(Hx, norm=None)  # ~ √N if input scales with 1 (which it does if it comes from ortho fw hartley)
-    if norm == "ortho":
-        x = x / jnp.sqrt(N) # scales with 1/√N
-    return x  # total scale: 1 if ortho AND input is from ortho fw_hartley.
-    # if instead input is not from non-ortho fw_hartley: ~ √N I think.
+# def fw_hartley(x, norm="ortho"):
+#     r"""
+#     If ortho, preserves scaling of input. I.e.
+#
+#         jnp.var(fw_hartley(\xi)) = jnp.var(\xi) if e.g. \xi is iid.
+#
+#     :param x:
+#     :param norm:
+#     :return:
+#     """
+#     N = len(x)
+#     Xf = jnp.fft.fft(x)  # Accumulates √N of intrinsic scaling
+#     Hx = Xf.real - Xf.imag  # standard Hartley: cos+sin → real - imag
+#     if norm == "ortho":
+#         Hx = Hx / jnp.sqrt(N)  #  scales with 1/√N
+#     return Hx  # total scale: 1 if ortho, else √N
+#
+#
+# def bw_hartley(Hx, norm="ortho"):
+#     r"""
+#     This is unitary if ortho norm i.e.
+#
+#             xi = jnp.random.standard_normal(8193)
+#             v = bw_hartley(xi)
+#
+#             v.T @ v ==  xi.T @ xi
+#
+#     :param Hx:
+#     :param norm:
+#     :return:
+#     """
+#     # Hartley is its own inverse! Note: H(H(x)) = N for not-normalized Hartley H.
+#     # Further, Hx = fw_ortho_hartley(x) ~ 1.
+#     N = len(Hx)
+#     x = fw_hartley(Hx, norm=None)  # ~ √N if input scales with 1 (which it does if it comes from ortho fw hartley)
+#     if norm == "ortho":
+#         x = x / jnp.sqrt(N) # scales with 1/√N
+#     return x  # total scale: 1 if ortho AND input is from ortho fw_hartley.
+#     # if instead input is not from non-ortho fw_hartley: ~ √N I think.
 
 
 def power_analyze_re_hartley(y_values):

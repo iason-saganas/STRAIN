@@ -10,6 +10,10 @@ from nifty.nifty.re.likelihood import Likelihood
 from jax.experimental.shard_map import shard_map
 import nifty.nifty.re as jft
 
+
+__all__ = ["calculate_kl_val_and_grad", "get_beneficial_position"]
+
+
 _reduce = partial(tree_map, partial(jnp.mean, axis=0))
 class _StandardHamiltonian(LazyModel):
     """Joined object storage composed of a user-defined likelihood and a

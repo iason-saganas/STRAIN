@@ -1,5 +1,7 @@
 from _01_get_smooth_baseline_ps import *
 from function_02_get_location_of_spikes import _02_get_location_of_spikes_from_xi
+import numpy as np
+import nifty.nifty.re as jft
 
 if __name__ == "__main__":
     pipe_2_called_as_import = False

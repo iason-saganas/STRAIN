@@ -1,5 +1,7 @@
 from _03_baseline_plus_line_model_inference import *
-from useful.signal_models import BrokenPowerLaw
+from scipy.signal.windows import tukey
+
+
 # In this file, I take the Welch average for the noise statistics, model the signal as a CFM and initiate
 # it at the waveform found inverting the Wigner function
 
@@ -98,7 +100,7 @@ wigner_xi_waveform = interpolate_waveform_from_inverted_wigner(pipe_3.t_ss)
 wigner_xi_waveform /= max(wigner_xi_waveform)  # The inverted wigner misses some normalization factors.
 # these can be recovered and should then give the correct amplitude. I set it manually here
 
-norm = (pipe_3.k_signal_full)**(-2)
+norm = pipe_3.k_signal_full ** (-2)
 norm[0]=1
 harmonic_wigner_xi_waveform = fw_hartley(wigner_xi_waveform, norm=None) / norm / 1e6
 

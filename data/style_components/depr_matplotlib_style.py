@@ -1,6 +1,14 @@
+"""
+This file will be depreaceted, I will be keeping strain_tools.plotting up-to-date instead.
+"""
+
 import matplotlib.pyplot as plt
 import matplotlib as mpl
 import datetime
+import re
+
+__all__ = ["thesis_plot", "thesis_multiplot", "red", "light_red", "blue", "light_blue",
+           "lighter_blue", "lightest_blue", "green", "light_green"]
 
 thesis_fontsize_pts = 12
 title_fontsize_pts = 1.6 * thesis_fontsize_pts
@@ -32,8 +40,6 @@ mpl.rcParams["mathtext.fontset"] = "custom"
 mpl.rcParams["mathtext.rm"] = "Hubballi"
 mpl.rcParams["mathtext.it"] = "Hubballi"
 mpl.rcParams["mathtext.bf"] = "Hubballi"
-
-import re
 
 def wrap_latex_label(label, width=20):
     parts = re.split(r'(\$.*?\$)', label)  # split into math / text

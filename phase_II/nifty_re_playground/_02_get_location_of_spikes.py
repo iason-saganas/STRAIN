@@ -1,5 +1,6 @@
 from _01_get_smooth_baseline_ps import *
-from useful.calculate_pseudoinverse import find_penrose_moore_solution, sample_from_ps
+import numpy as np
+import jax.numpy as jnp
 
 data_grid = pipe_1.d_dom_real
 harmonic_signal_grid = pipe_1.s_dom_harmonic
@@ -18,7 +19,7 @@ posterior_pipe_1_ps_mean = (posterior_pipe_1_ps_mean_std[0])[signal_distributor]
 
 penrose_xi = find_penrose_moore_solution(pipe=pipe_1, itr=100_000, reload_from_cache=True)
 
-peaks_k, norm_amplitudes_k = get_peaks_from_cache_v2(local_sigma_threshold=3, global_sigma_threshold=2, window_length=20,
+peaks_k, norm_amplitudes_k = get_peaks(local_sigma_threshold=3, global_sigma_threshold=2, window_length=20,
                                                      take_abs_of_amplitudes=True)
 
 # Plot of penrose_xi and its 2 sigma peaks
