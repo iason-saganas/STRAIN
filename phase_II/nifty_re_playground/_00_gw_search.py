@@ -1,8 +1,11 @@
-from phase_II.nifty_re_playground.useful.helpers import *
-from phase_II.nifty_re_playground.useful.helpers import convert_gps_to_seconds
+from phase_II.nifty_re_playground.strain_tools import *
+import numpy as np
+import matplotlib.pyplot as plt
+import jax.numpy as jnp
+
 from phase_II.utils.helpers import whiten, bandpass
+import jax
 jax.config.update("jax_enable_x64", True)
-from phase_II.nifty_re_playground.useful.basics.welch_average import calculate_welch_average
 
 save_results_path = "/Users/iason/PycharmProjects/STRAIN/phase_II/gw_search_results/"
 off_center = 1.5
@@ -66,7 +69,7 @@ for i in range(len(windows)):
         tl = "Time window: " + str(np.float64(current_time.min())) + " - " + str(np.float64(current_time.max())) + f" (No. {i} 0-based)"
         usual_plot(title=tl)
 
-        wigner_function, t, f = Stress_re(xi=xi_d_tilde, time=current_time)
+        wigner_function, t, f = Stress_jft(xi=xi_d_tilde, time=current_time)
         smoothed_wigner = smooth_matrix(wigner_function, smoothing_lvl=5, mode="gaussian")
 
         visualize_stress(wigner_function, rows=f, cols=t, smooth=False)

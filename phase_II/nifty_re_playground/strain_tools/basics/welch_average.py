@@ -58,7 +58,9 @@ def power_analyze_re_hartley(y_values):
     return jnp.abs(fw_hartley(y_values, norm="ortho"))**2
 
 
-def calculate_welch_average(x, y, L, leave_out=None, debug=False, output_on_full_harmonic_domain=False):
+def calculate_welch_average(x, y, L=2, leave_out=None, debug=False, output_on_full_harmonic_domain=False,
+                            final_average_call=jnp.mean,
+                            tapering_function=lambda d: tukey(M=len(d), alpha=0.1, sym=True)):
     """
     Subdivides data into little windows of length L, tapers, takes their fourier-transform absolutely squared 
     and performs an average over all windows.
@@ -138,8 +140,6 @@ def calculate_welch_average(x, y, L, leave_out=None, debug=False, output_on_full
     if debug:
         welch_average_debug_plot_III(collection_of_small_datasets_strain, collection_of_small_datasets_times, x_in_strip_1, y_strip_1, x_in_strip_2, y_strip_2)
 
-    tapering_function = lambda d: tukey(M=len(d), alpha=0.1, sym=True)
-
     collection_of_small_datasets_strain_windowed = [d * tapering_function(d) for d in
                                                     collection_of_small_datasets_strain]
 
@@ -157,14 +157,17 @@ def calculate_welch_average(x, y, L, leave_out=None, debug=False, output_on_full
 
     empirical_power_spectra = jnp.array([power_analyze_re_hartley(y_values=h) for h in data_fields])
     k = jnp.fft.fftfreq(n=n_dtps, d=dx)
-    ps = jnp.mean(empirical_power_spectra, axis=0)
+    ps = final_average_call(empirical_power_spectra, axis=0)
 
     S = collection_of_small_datasets_strain_windowed
     T = collection_of_small_datasets_times
     WINDOWS = jnp.array(list(zip(T,S)))
 
-    print("Done")
-    return k, ps, WINDOWS
+    if output_on_full_harmonic_domain:
+        return k, ps, WINDOWS
+    else:
+        mask = (k > 0)
+        return k[mask], ps[mask], WINDOWS
 
 
 def get_lr_edges(x, y, L):

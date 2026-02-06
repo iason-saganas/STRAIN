@@ -1,10 +1,12 @@
 import jax.numpy as jnp
 from jax import vmap
-
+import matplotlib.pyplot as plt
 import nifty.nifty.re as jft
 import numpy as np
 
-from ..basics.common_utils import fw_hartley
+from ..basics.common_utils import fw_hartley, bw_hartley, raise_warning
+from ..basics.plotting import usual_plot
+
 
 __all__ = ["NormedGaussianComb", "BaselineNormedGaussianComb", "ScaledPowerSpectrumTemplate",
            "InvNoiseCovFromPs", "NoiseCovarianceFromPs"]
@@ -266,7 +268,7 @@ class ScaledPowerSpectrumTemplate(jft.Model):
         return scale_realization * self.ps_template
 
 
-class InvNoiseCovFromPs():
+class InvNoiseCovFromPs:
     def __init__(self, one_sided_noise_ps:jnp.array, data_grid, e_fac, n_dtps:int, custom_norm=1):
         r"""
 
@@ -418,7 +420,7 @@ class InvNoiseCovFromPs():
         usual_plot()
 
 
-class NoiseCovarianceFromPs():
+class NoiseCovarianceFromPs:
     def __init__(self, one_sided_noise_ps:jnp.array, data_grid, callable_to_apply=None,):
         r"""
         Please see deprecated class `InvNoiseCovFromPs` as well.

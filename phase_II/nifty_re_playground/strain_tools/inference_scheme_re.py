@@ -860,6 +860,8 @@ class InferenceSchemeRe:
         :return:
         """
 
+        _ = plt.figure(figsize=(8,2))
+
         if mode == "signal & power spectrum":
             print("Not plotting 0-mode for visual purposes")
             for _ in range(num):
@@ -897,8 +899,10 @@ class InferenceSchemeRe:
         for sl in samples:
             np.savetxt("x_131215.txt", x)
             np.savetxt("y_131215.txt", sl)
+
             plt.plot(x, sl)
             if rolling:
+                _ = plt.figure(figsize=(8, 2))
                 if plot_welch_average:
                     plot_welch_averaged_ps()
                     plt.loglog()
@@ -961,6 +965,8 @@ class InferenceSchemeRe:
         _, signal_mean_std_ss, _ = (
             self.get_posterior_statistics(print_posterior_parameters))
 
+        _ = plt.figure(figsize=(8,2))
+
         if not over_full_signal_space:
             N = len(self.t_ds)
             tmp1 = signal_mean_std_ss[0]
@@ -990,7 +996,6 @@ class InferenceSchemeRe:
 
         # plot the mean line on top
         plt.plot(time, signal_mean, color=blue, label=r"Reconstructed signal", lw=2)
-
 
         if plot_nrt:
             nrt_strain_values = np.loadtxt("/Users/iason/PycharmProjects/STRAIN/data/data_txt/num_rel_template_strain_values.txt") * 1e19
@@ -1033,6 +1038,7 @@ class InferenceSchemeRe:
         percentile_84 = jnp.percentile(ps_samples, 84, axis=0)
         ps_median = jnp.percentile(ps_samples, 50, axis=0)  # percentile_50
 
+        _ = plt.figure(figsize=(8,2))
 
         if plot_welch_average:
             plot_welch_averaged_ps()
@@ -1136,6 +1142,8 @@ class InferenceSchemeRe:
         if N_sqrt is None:
             raise ValueError("self.sqrt_noise_op must not be None to draw samples from N.")
 
+        _ = plt.figure(figsize=(8, 2))
+
         noise_samples = []
         for _ in range(500):
             xi = np.random.standard_normal(self.n_ds)
@@ -1152,7 +1160,7 @@ class InferenceSchemeRe:
 
         if not rolling and show:
             plt.plot(self.t_ds, self.d, label="Actual data", color="black")
-            thesis_plot()
+            thesis_plot("basic")
 
 
     def calculate_and_plot_penrose_xi(self, itr=10_000, plot=True):

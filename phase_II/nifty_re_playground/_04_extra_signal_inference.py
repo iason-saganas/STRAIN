@@ -1,6 +1,11 @@
-from _03_baseline_plus_line_model_inference import *
+# from _03_baseline_plus_line_model_inference import *
 from scipy.signal.windows import tukey
+from strain_tools import *
+import numpy as np
+import jax
 
+jax.config.update("jax_enable_x64", True)
+key = jax.random.PRNGKey(0)
 
 # In this file, I take the Welch average for the noise statistics, model the signal as a CFM and initiate
 # it at the waveform found inverting the Wigner function
@@ -37,14 +42,15 @@ pipe_3 = InferenceSchemeRe(t=time, d=strain, e_fac=1, r_fac=1, key=key, plotting
 pipe_3.add_custom_signal_model(BrokenPowerLaw(
     signal_grid=pipe_3.s_dom_real,
     # pl_slope_left=11,
-    pl_slope_left=(1, 1),
+    pl_slope_left=(1, .5),
     # peak_power=(1000, 100),
     peak_power=1e3,
     # sigmoid_width=1.8,
     sigmoid_width=30,
-    # pl_slope_right=(-10, 2),
-    pl_slope_right=-10,
-    k_break=(120, 150),
+    pl_slope_right=(-1, .5),
+    # pl_slope_right=-10,
+    k_break=(30, 200),
+    # k_break=(120, 150),
     # k_break=120,
     # fluctuations=1e-1,
     fluctuations=(1, 1),
@@ -96,13 +102,13 @@ print("Variance of data: " , np.var(pipe_3.d))
 pipe_3.add_noise_op(inverse_noise_op=N_inv, sqrt_inverse_noise_op=N_sqrt_inv, sqrt_noise_op=N_sqrt)
 
 # 4. Get some noise and signal samples
-wigner_xi_waveform = interpolate_waveform_from_inverted_wigner(pipe_3.t_ss)
-wigner_xi_waveform /= max(wigner_xi_waveform)  # The inverted wigner misses some normalization factors.
+# wigner_xi_waveform = interpolate_waveform_from_inverted_wigner(pipe_3.t_ss)
+# wigner_xi_waveform /= max(wigner_xi_waveform)  # The inverted wigner misses some normalization factors.
 # these can be recovered and should then give the correct amplitude. I set it manually here
 
-norm = pipe_3.k_signal_full ** (-2)
-norm[0]=1
-harmonic_wigner_xi_waveform = fw_hartley(wigner_xi_waveform, norm=None) / norm / 1e6
+# norm = pipe_3.k_signal_full ** (-2)
+# norm[0]=1
+# harmonic_wigner_xi_waveform = fw_hartley(wigner_xi_waveform, norm=None) / norm / 1e6
 
 # pipe_3.plot_noise_sample_with_data(num=2, rolling=False)
 
@@ -112,7 +118,7 @@ harmonic_wigner_xi_waveform = fw_hartley(wigner_xi_waveform, norm=None) / norm /
 #                               "s_loglogavgslope": -1.},
 #                     plot=True, plot_welch_average=False)
 
-latent_samples = pipe_3.run_inference(kl_iterations=10, use_strict_minimizers=False, out_name="re_extra_pipe_3_151225_8",
+latent_samples = pipe_3.run_inference(kl_iterations=15, use_strict_minimizers=False, out_name="re_pipe_3_broken_power_law",
                                       resume=True, choose_low_kl_starting_pos=False, geoVi=True)
 key = pipe_3.get_current_key()
 

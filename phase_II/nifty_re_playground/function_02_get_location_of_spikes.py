@@ -1,5 +1,8 @@
-from phase_II.nifty_re_playground.useful.math.calculate_pseudoinverse import find_penrose_moore_solution, sample_from_ps
-from phase_II.nifty_re_playground.useful.helpers import *
+from strain_tools import *
+import os
+import numpy as np
+import jax.numpy as jnp
+import matplotlib.pyplot as plt
 
 def _02_get_location_of_spikes_from_xi(pipe:InferenceSchemeRe, output_folder:str, harmonic_xi:jnp.array=None,
                                        penrose_xi_iter=100_000):
@@ -36,7 +39,7 @@ def _02_get_location_of_spikes_from_xi(pipe:InferenceSchemeRe, output_folder:str
         to_save = np.column_stack((harmonic_xi, pipe.k_signal_full))
         np.savetxt(fn, to_save, )
 
-    peaks_k, norm_amplitudes_k = get_peaks_from_cache_v2(local_sigma_threshold=3, global_sigma_threshold=2,
+    peaks_k, norm_amplitudes_k = get_peaks(local_sigma_threshold=3, global_sigma_threshold=2,
                                                          window_length=20, take_abs_of_amplitudes=True,
                                                          custom_path=fn)
 
