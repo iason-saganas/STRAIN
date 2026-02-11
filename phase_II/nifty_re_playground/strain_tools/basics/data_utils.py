@@ -14,8 +14,10 @@ import re
 from .common_utils import unpickle_me_this
 from ..basics.welch_average import calculate_welch_average
 
-__all__ = ["get_sample_data", "iterative_midpoint_average", "power_analyze_re", "unpack_centered",
-                 "convert_gps_to_seconds", "DEPR_get_strain_data", "get_time_and_strain_from_disc"]
+__all__ = [ "get_sample_data", "iterative_midpoint_average", "power_analyze_re", "unpack_centered",
+            "convert_gps_to_seconds", "DEPR_get_strain_data", "get_time_and_strain_from_disc",
+            "whiten"
+            ]
 
 
 def get_sample_data(norm=1e19, time_window=(15,17), end_points_small=False, taper=False):
@@ -174,7 +176,7 @@ def _get_strain_data(gps_center, absolute_path, desired_duration=32, unpack=True
     """
     Get strain data based on HDF5 objects saved on the disk.
 
-    :param gps_center:              A float around which the series is centered
+    :param gps_center:              A float around which the series is centered. If None, uses initial time.
     :param absolute_path:           The absolute path of the HDF5 file.
     :param unpack:                  If false, return the GWPY series object, else time and strain as tuple.
     :param desired_duration:        The returned time series will be centered on gps_center and start at
@@ -184,13 +186,19 @@ def _get_strain_data(gps_center, absolute_path, desired_duration=32, unpack=True
     strain_series = TimeSeries.read(absolute_path, format='hdf5.gwosc')
     if not unpack:
         return strain_series
-    time = np.array(strain_series.times) - gps_center
     strain = strain_series.value * 1e19
 
-    left_time_bound = -desired_duration/2
-    right_time_bound = +desired_duration/2
+    base_time = np.array(strain_series.times)
+    if gps_center:
+        time = base_time - gps_center
+        left_time_bound = -desired_duration/2
+        right_time_bound = +desired_duration/2
+    else:
+        time = base_time - base_time[0]
+        left_time_bound = 0
+        right_time_bound = desired_duration
 
-    to_keep = np.where((time > left_time_bound) & (time < right_time_bound))
+    to_keep = np.where((time >= left_time_bound) & (time <= right_time_bound))
     time_masked = time[to_keep]
     strain_masked = strain[to_keep]
     return time_masked, strain_masked
@@ -247,7 +255,7 @@ def DEPR_get_strain_data(gw_name = 'GW150914', detector = 'H1', duration = 32, u
     return unpack_centered(strain_series, gps_time, duration=duration, center_at=center_at)
 
 
-def whiten(y:np.array, amp:np.array, tapering_function = None):
+def whiten(y:np.array, amp:np.array, tapering_function=lambda d: tukey(M=len(d), alpha=0.1, sym=True)):
     """
 
     :param y:                       The real-space data to whiten.
@@ -256,9 +264,6 @@ def whiten(y:np.array, amp:np.array, tapering_function = None):
 
     :return: The whitened data in real space. Normalization probably something like *N.
     """
-    if tapering_function is None:
-        tapering_function = lambda d: tukey(M=len(d), alpha=0.1, sym=True)
-
     y = y*tapering_function(y)
     y_harmonic = np.fft.fft(y)
     whitened_y_harmonic = y_harmonic / amp
@@ -321,7 +326,7 @@ def _get_window_containing_zero(WINDOWS):
 
 
 def get_time_and_strain_from_disc(event_name="GW150914", detector:Literal["H1", "L1"]= "H1",
-                                  data_duration:Literal["32sec", "4096sec"]="4096sec",
+                                  data_duration:Literal["32sec", "4096sec"]="4096sec", center_on_event=True,
                                   desired_duration=32, add_whitened_data=False, **kwargs):
     """
     Given the unique name of an event like GW150914, retrieves time and strain values as well as the corresponding
@@ -383,6 +388,8 @@ def get_time_and_strain_from_disc(event_name="GW150914", detector:Literal["H1", 
 
     match = matches[0]
     gps_time = _get_event_gps_from_readme(event_name, path_to_readme=os.path.join(base_path, readme))
+    if not center_on_event:
+        gps_time = None
 
     kwargs_unpack = {'desired_duration': desired_duration, 'unpack': True, 'gps_center': gps_time,
      'absolute_path': os.path.join(base_path, match)}

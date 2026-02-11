@@ -2,6 +2,7 @@ import nifty.nifty.re as jft
 import matplotlib.pyplot as plt
 import jax
 import jax.numpy as jnp
+from phase_II.nifty_re_playground.strain_tools import *
 
 def create_cfm(time_domain, prefix, offset_std, offset_mean, fluct, llslope, flex=None):
     """
@@ -69,7 +70,8 @@ def draw_and_plot_field_realizations(times, diff_eq_solver_model, omega_op, gamm
     return waveform, key
 
 
-def plot_posterior(key, times, operator_list, label_list, latent_samples, plot_prior_samples=True):
+def plot_posterior(key, times, operator_list, label_list, latent_samples, plot_prior_samples=True,
+                   save_fig=False):
 
     print("Imposing condition <jnp.max(jnp.abs(prior_sample)) < 2 * jnp.max(jnp.abs(mean_op))> on prior samples")
 
@@ -85,9 +87,17 @@ def plot_posterior(key, times, operator_list, label_list, latent_samples, plot_p
         ax = fig.add_subplot(N, 1, idx + 1)
 
         if len(mean_op) < len(times):
-            ax.plot(times[:len(mean_op)], mean_op, label="posterior " + label_list[idx], color="red", lw=3)
+            if save_fig:
+                lb = None
+            else:
+                lb = "posterior " + label_list[idx]
+            ax.plot(times[:len(mean_op)], mean_op, label=lb, color=blue, lw=3)
         else:
-            ax.plot(times, mean_op[:M], label="posterior " + label_list[idx], color="red", lw=3)
+            if save_fig:
+                lb = None
+            else:
+                lb = "posterior " + label_list[idx]
+            ax.plot(times, mean_op[:M], label=lb, color=blue, lw=3)
 
         if plot_prior_samples:
             for _ in range(3):
@@ -103,8 +113,10 @@ def plot_posterior(key, times, operator_list, label_list, latent_samples, plot_p
                         ax.plot(times, prior_sample[:M], color="black", alpha=0.3)
 
         ax.legend()
-    fig.axes[0].set_title("Posterior fields (prior samples in black)")
+    fig.axes[0].set_title("Posterior fields (some prior samples in gray)")
     plt.tight_layout()
+    if save_fig:
+        plt.savefig("posterior.pdf")
     plt.show()
 
     return key

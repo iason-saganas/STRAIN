@@ -84,8 +84,8 @@ def calculate_welch_average(x, y, L=2, leave_out=None, debug=False, output_on_fu
                                 Whether the returned field is power distributed to the full harmonic domain.
     :return:
                                 k_full, welch_averaged_ps and WINDOWS where windows contains elements such that
-                                    window = WINDOWS[0]
-                                    time_window_one, strain_window_one = window[0], window[1]
+                                    first_window = WINDOWS[0]
+                                    time_in_first_window, strain_in_first_window = first_window
     """
     print("Start: Calculating welch average")
     L_global = jnp.max(x)-jnp.min(x)
@@ -110,10 +110,12 @@ def calculate_welch_average(x, y, L=2, leave_out=None, debug=False, output_on_fu
     if debug:
         welch_average_debug_plot_I(x_in_strip_1, y_strip_1, x_in_strip_2, y_strip_2)
 
-    lf_edges_ds1, r_edges_ds1 = get_lr_edges(x_in_strip_1, y_strip_1, L)
-    lf_edges_ds2, r_edges_ds2 = get_lr_edges(x_in_strip_2, y_strip_2, L)
+    check_even = (L_global % L == 0.)  # in general, for any integer L, this will not be true due to finite
+    # sampling frequency! Will always be off by a bit.
+    lf_edges_ds1, r_edges_ds1 = get_lr_edges(x_in_strip_1, y_strip_1, L, even=check_even)
+    lf_edges_ds2, r_edges_ds2 = get_lr_edges(x_in_strip_2, y_strip_2, L, even=check_even)
 
-    num = len(lf_edges_ds1) + len(lf_edges_ds2) if leave_out is not None else len(lf_edges_ds1)
+    num = len(lf_edges_ds1) + len(lf_edges_ds2) if leave_out is not None else len(lf_edges_ds1)-1
     print(f"\nConstructing {num} windows over which we average.\n")
 
     if debug:
@@ -170,11 +172,22 @@ def calculate_welch_average(x, y, L=2, leave_out=None, debug=False, output_on_fu
         return k[mask], ps[mask], WINDOWS
 
 
-def get_lr_edges(x, y, L):
-    lf_edges = jnp.arange(min(x), max(x), L)
-    rght_edges = (lf_edges + L)[:-1]
-    return lf_edges, rght_edges
+def get_lr_edges(x, y, L, even):
+    """
 
+    :param L:          Length of little windows
+    :param x:          The global times.
+    :param y:          The global strain.
+    :param even:       Whether the total time is exactly divisible by L. If this is not the case, we need to discard
+                       the very last window to upkeep equal-length windows. Visually clear when setting `debug` to True
+                       in the `calculate_welch_average` function and inspecting the corresponding plots.
+    :return:
+    """
+    lf_edges = jnp.arange(min(x), max(x), L)
+    rght_edges = (lf_edges + L)
+    if not even:
+        rght_edges = rght_edges[:-1]
+    return lf_edges, rght_edges
 
 
 def welch_average_debug_plot_I(x_in_strip_1, y_strip_1, x_in_strip_2, y_strip_2, show=True, alpha=1.):

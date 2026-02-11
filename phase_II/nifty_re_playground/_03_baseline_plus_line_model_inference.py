@@ -146,7 +146,10 @@ for r in range(global_peak_refinement_steps):
     if not pipe_2_called_as_import and plot_results:
 
         pipe_2.plot_posterior_signal()
-        pipe_2.plot_posterior_power_spectrum(mode="mean")
+        save_fig = False
+        # if r == 5:
+        #     save_fig = True
+        pipe_2.plot_posterior_power_spectrum(mode="mean", save_fig=save_fig)
         pipe_2.plot_posterior_harmonic_xi_s()
 
         # pipe_2.plot_posterior_harmonic_xi_s(multiply_with_posterior_amp_spec=True)
@@ -155,13 +158,38 @@ for r in range(global_peak_refinement_steps):
         # S, t_dual, f_dual = Stress_re(xi_s_harmonic, time=time, downsample=False)
         # visualize_stress(S, f_dual, t_dual, smooth=True, detect_outliers=False)
 
-        # penrose_xi = pipe_2.calculate_and_plot_penrose_xi(itr=100_000, plot=True)
+        if r == 5:
+            penrose_xi = pipe_2.calculate_and_plot_penrose_xi(itr=100_000, plot=True, reload_from_cache=True)
 
-        # S, t_dual, f_dual = Stress_re(penrose_xi, time=time, downsample=False)
-        # pickle_me_this("wigner_results_from_penrose_xi_without_welch_average", [S, t_dual, f_dual])
-        # S, t_dual, f_dual = unpickle_me_this("wigner_results_from_penrose_xi_without_welch_average.pickle")
+            # _ = plt.figure(figsize=(8.,4.))
+            # plt.plot(pipe_2.k_signal_full, penrose_xi.real, color=blue)
+            # thesis_plot(mode="longer", xl=r"Frequency $\mathrm{[Hz]}$", yl="Amplitude (arb. units)", save_fig=True)
 
+            S_penrose, t_dual, f_dual = Stress_jft(penrose_xi, time=time, downsample=False)
+            # pickle_me_this("wigner_results_from_penrose_xi_without_welch_average", [S, t_dual, f_dual])
+            # S, t_dual, f_dual = unpickle_me_this("wigner_results_from_penrose_xi_without_welch_average.pickle")
 
-        # visualize_stress(S, f_dual, t_dual, smooth=True, detect_outliers=False, smoothing_level=3,
-        #                  save_fig=False, xlim=(min(time), max(time)), cmap="plasma")
-
+            plt.figure(figsize=(6, 6))
+            ax = plt.gca()
+            cb, im = visualize_stress(S_penrose, f_dual, t_dual, smooth=True, smoothing_level=3,
+                                      save_fig=False, xlim=(min(time), max(time)), cmap="plasma", delay_plot=True,
+                                      custom_ax=ax, return_aux=True)
+            plt.xlim(16.3, 16.5)
+            plt.ylim(-400, 400)
+            plt.xlabel(r"Time $\mathrm{[s]}$")
+            plt.ylabel(r"Frequency $\mathrm{[Hz]}$")
+            plt.subplots_adjust(right=0.8, left=0.2)
+            save_figure(save_fig=False, tight_ly=False, show=True)
+        # if r == 6:
+        #     import jax.numpy as jnp
+        #     xi_s_harmonic = pipe_2.plot_posterior_harmonic_xi_s(show=False)
+        #
+        #     # Notch filter
+        #     mask = jnp.abs(xi_s_harmonic) > 0.1
+            # xi_s_harmonic = xi_s_harmonic.at[mask].set(0.0)
+            #
+            # plt.plot(pipe_2.k_signal_full, xi_s_harmonic)
+            # plt.show()
+            #
+            # S, t_dual, f_dual = Stress_jft(xi_s_harmonic, time=time, downsample=False)
+            # visualize_stress(S, f_dual, t_dual, smooth=True)

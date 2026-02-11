@@ -60,9 +60,9 @@ def plot_welch_averaged_ps(ax=None):
     k_lengths = k_lengths[1:]  # remove 0-mode for simplicity
     spectrum_welch = power_spectrum[1:]
     if ax is None:
-        plt.plot(k_lengths, spectrum_welch, label="Empirical estimate", color="orange")
+        plt.plot(k_lengths, spectrum_welch, label="Empirical estimate", color="black")
     else:
-        ax.plot(k_lengths, spectrum_welch, label="Empirical estimate", color="orange")
+        ax.plot(k_lengths, spectrum_welch, label="Empirical estimate", color="black")
 
 
 def mean_red_chi2(data, d_th_samples, N_inv_op):
@@ -965,7 +965,7 @@ class InferenceSchemeRe:
         _, signal_mean_std_ss, _ = (
             self.get_posterior_statistics(print_posterior_parameters))
 
-        _ = plt.figure(figsize=(8,2))
+        _ = plt.figure(figsize=(8,4))
 
         if not over_full_signal_space:
             N = len(self.t_ds)
@@ -1007,7 +1007,7 @@ class InferenceSchemeRe:
             plt.plot(nrt_time_values[:go_until], nrt_strain_values[:go_until], label="LIGO Template",
                      color=red)
 
-        thesis_plot(**kwargs)
+        thesis_plot(**kwargs, mode="longer")
 
 
 
@@ -1038,7 +1038,7 @@ class InferenceSchemeRe:
         percentile_84 = jnp.percentile(ps_samples, 84, axis=0)
         ps_median = jnp.percentile(ps_samples, 50, axis=0)  # percentile_50
 
-        _ = plt.figure(figsize=(8,2))
+        _ = plt.figure(figsize=(8,4))
 
         if plot_welch_average:
             plot_welch_averaged_ps()
@@ -1059,7 +1059,7 @@ class InferenceSchemeRe:
 
         # plt.ylim(-3e-9, 1.4e-7)
         plt.loglog()
-        thesis_plot(xl="Frequency $f$", yl="Power", **kwargs)
+        thesis_plot(xl="Frequency $f$", yl="Power", mode="longer",**kwargs)
 
 
     def plot_posterior_harmonic_xi_s(self, multiply_with_posterior_amp_spec=False,
@@ -1133,8 +1133,9 @@ class InferenceSchemeRe:
             thesis_plot(xl="Frequency $f$", yl=r"$\mathrm{power}$")
 
         else:
+            _ = plt.figure(figsize=(8, 4))
             plt.plot(self.k_signal_full, posterior_xi_s_mean, "r-", label=r"Posterior mean")
-            thesis_plot(xl="Frequency $f$", yl=r"$\xi_s$")
+            thesis_plot(xl="Frequency $f$", yl=r"$\xi_s$", mode="longer")
 
 
     def plot_noise_sample_with_data(self, num, rolling=False, show=True):
@@ -1163,8 +1164,9 @@ class InferenceSchemeRe:
             thesis_plot("basic")
 
 
-    def calculate_and_plot_penrose_xi(self, itr=10_000, plot=True):
-        penrose_xi = find_penrose_moore_solution(itr, pipe=self, reload_from_cache=False, filename="my_penrose_xi.txt")
+    def calculate_and_plot_penrose_xi(self, itr=10_000, plot=True, reload_from_cache=False):
+        # Only use reload_from_cache if you know what you are doing!!!
+        penrose_xi = find_penrose_moore_solution(itr, pipe=self, reload_from_cache=reload_from_cache, filename="my_penrose_xi.txt")
         if plot:
 
             mean_ps = self.get_posterior_statistics(moment="mean", quantity="power spectrum full")

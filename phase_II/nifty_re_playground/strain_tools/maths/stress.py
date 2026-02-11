@@ -1,15 +1,19 @@
+import jax.numpy as jnp
 import numpy as np
 from scipy.interpolate import interp1d
-import jax.numpy as jnp
 from scipy.signal import find_peaks
+
+import matplotlib.pyplot as plt
 
 import nifty.nifty.cl as ift
 from typing import Literal
 
 from ..basics.common_utils import raise_warning
+from ..basics.plotting import smooth_matrix
 
-__all__ = ["interpolate_waveform_from_inverted_wigner", "Stress_jft", "Stress_ift", "get_peaks",
-                 "solve_data_equation_for_xi"]
+__all__ = [ "interpolate_waveform_from_inverted_wigner", "Stress_jft", "Stress_ift", "get_peaks", "detection_statistic",
+            "solve_data_equation_for_xi",
+            ]
 
 
 def interpolate_waveform_from_inverted_wigner(new_times):
@@ -406,3 +410,49 @@ def solve_data_equation_for_xi(data, ps):
     data_tilde = jnp.fft.fft(data)
     amp = jnp.sqrt(ps)
     return data_tilde / amp
+
+
+def detection_statistic(stress_matrix, raw=False, plot=True, time_var=None, custom_ax=None, title=None, normalize=False, lb=""):
+    """
+
+    :param stress_matrix: 2D array, shape (n_f, n_t):   Output from stress_jft() function in standard DFT order.
+    :param raw: bool,                                   If True, the input matrix is not manipulated in any way.
+    :param normalize: bool,                             If True, DC-line is divided by its max and the average is printed.
+
+    Picks out the interference pattern on the DC-line of a Wigner-derived phase-space distribution through the following
+    operations:
+
+        1. Shifts from standard DFT order to DC-centered ordered along columns
+        2. Smooths through Gaussian convolution
+        3. Takes the absolute square. We call the resulting matrix 'smoothed Wigner power' (power => positive)
+        4. Extracts DC-line from smoothed Wigner power
+
+    :return dc_line,    The line corresponding to f=0 in the smoothed Wigner power
+    :return SWP,        Smoothed Wigner power matrix in standard DFT order.
+
+    """
+
+    X = np.fft.fftshift(stress_matrix, axes=0)  # shift rows, corresponding to frequencies, such that f=0 is "in the middle" of the matrix. stress_matrix MUST be in standard DFT order (f=0 at the very bottom/top)
+
+    if raw:
+        SWP = X
+    else:
+        SWP = smooth_matrix(X, smoothing_lvl=5).real**2
+
+    where_dc = SWP.shape[0]//2
+    dc_line = SWP[where_dc, :]
+
+    if normalize:
+        dc_line /= np.max(dc_line)
+        print("Average of smoothed Wigner power's DC-line: ", np.average(dc_line))
+
+    if plot:
+        if time_var is None:
+            raise ValueError("To plot, please provide time array")
+        if custom_ax is None:
+            _ = plt.figure()
+            axis = plt.gca()
+        else:
+            axis = custom_ax
+        axis.plot(time_var, dc_line, label=lb, color="black")
+    return dc_line, np.fft.ifftshift(SWP, axes=0)

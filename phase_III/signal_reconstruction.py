@@ -1,6 +1,7 @@
-from phase_II.nifty_re_playground.useful.helpers import *
+from phase_II.nifty_re_playground.strain_tools import *
 from phase_III.useful.helpers import *
 from phase_III.useful.diff_equ_solver import *
+import numpy as np
 jax.config.update("jax_enable_x64", True)
 key = jax.random.key(34)
 
@@ -45,7 +46,7 @@ cfm_times  = np.arange(len(time)*r_fac) * cfm_dt + time.min()
 
 log_omega_cfm, log_gamma_cfm, xi_cfm = [create_cfm(time_domain=cfm_times, prefix=p, offset_std=ofs_std, offset_mean=ofs_m, fluct=flu, llslope=ll, flex=fle) for
                                 p,              ofs_std,        ofs_m,      flu,        ll,             fle in [
-                                ("omega_cfm_",  (.5, 1e-16),      9.2,        (1,1),  (-2, 1e-16),    None),  # idk just 100 and then everything in the same o.o.m.
+                                ("omega_cfm_",  (.5, 1e-16),      9.2,        (1,1),  (-2, 1e-16),    None),  # just 100Hz and then everything in the same o.o.m.
                                 # ("gamma_cfm_",  (2, 1e-16),     3.9,         (.5,.5),  (-4, 1e-16),   None),  # vary gamma significantly => Leads to nan curvature and probably too large gammas ,
                                 ("gamma_cfm_",  (1, 1e-16),     3.9,         (1e-16,1e-16),  (-10, 1e-16),   None),  # fix gamma
                                 ("xi_cfm_",     (1e-16, 1e-16),     0,         (1e3, 1e3),  (0, 1),    None),  # xi and gamma on equal footing. although sign of xi is ambiguous and depends on local
@@ -108,13 +109,13 @@ N_sqrt = NoiseCovarianceFromPs(one_sided_noise_ps=welch_pow_spec, callable_to_ap
 pipe_3.add_noise_op(inverse_noise_op=N_inv, sqrt_inverse_noise_op=N_sqrt_inv, sqrt_noise_op=N_sqrt)
 
 # 4. Get some noise and signal samples
-wigner_xi_waveform = interpolate_waveform_from_inverted_wigner(pipe_3.t_ss)
-wigner_xi_waveform /= max(wigner_xi_waveform)  # The inverted wigner misses some normalization factors.
+# wigner_xi_waveform = interpolate_waveform_from_inverted_wigner(pipe_3.t_ss)
+# wigner_xi_waveform /= max(wigner_xi_waveform)  # The inverted wigner misses some normalization factors.
 # these can be recovered and should then give the correct amplitude. I set it manually here
 
-norm = (pipe_3.k_signal_full)**(-2)
-norm[0]=1
-harmonic_wigner_xi_waveform = fw_hartley(wigner_xi_waveform, norm=None) / norm / 1e6
+# norm = pipe_3.k_signal_full ** (-2)
+# norm[0]=1
+# harmonic_wigner_xi_waveform = fw_hartley(wigner_xi_waveform, norm=None) / norm / 1e6
 
 # pipe_3.plot_noise_sample_with_data(num=2, rolling=False)
 
@@ -130,9 +131,9 @@ key = pipe_3.get_current_key()
 
 pipe_3.plot_posterior_signal(plot_nrt=True, print_posterior_parameters=True, over_full_signal_space=False,
                              plot_data=False,
-                             xlim=(15.6, 17.178),
-                             save_fig=True
-                             )
+                             xlim=(16.3, 16.46),
+                             save_fig=False,
+                             yl=r"$h(t)$ $\mathrm{[10^{-19}]}$")
 
 # signal_samples = [generative_wavelet(xi) for xi in latent_samples]
 # s_prime_samples = [s_prime(xi) for xi in latent_samples]
@@ -154,4 +155,4 @@ pipe_3.plot_posterior_signal(plot_nrt=True, print_posterior_parameters=True, ove
 # usual_plot()
 
 key = plot_posterior(key, times=cfm_times, operator_list=[omega_cfm, gamma_cfm, xi_cfm, generative_wavelet], latent_samples=latent_samples,
-                     label_list=["omega", "gamma res", "xi", "waveform"])
+                     label_list=["omega", "gamma res", "xi", "waveform"], save_fig=True)

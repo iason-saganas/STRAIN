@@ -70,7 +70,7 @@ def wrap_latex_label(label, width=20):
 
 
 def thesis_plot(
-                mode:Literal["basic", "longer"]="basic",
+                mode:Literal["basic", "longer", "square"]="basic",
                 xl=r"Time $t$ $\mathrm{[s]}$",
                 yl=r"$d(t)$ $\:\mathrm{[10^{-19}]}$",
                 title=None,
