@@ -142,7 +142,7 @@ class BaselineNormedGaussianComb(jft.Model):
         """
 
         Same as NormedGaussianComb but: the physical height of peak_i is multiplied with the current power spectrum
-        value at the nearest frequency to k_i before all peaks are summed and normalized.
+        value at the nearest frequency to k_i before all peaks are summed and normalized (if normalized).
 
         Therefore, list_of_amplitudes_above_baseline needs to contain amplitudes in orders of magnitude above the
         current baseline power spectrum, BEFORE normalization (complicates intuition a bit).
@@ -421,7 +421,8 @@ class InvNoiseCovFromPs:
 
 
 class NoiseCovarianceFromPs:
-    def __init__(self, one_sided_noise_ps:jnp.array, data_grid, callable_to_apply=None,):
+    def __init__(self, one_sided_noise_ps:jnp.array, data_grid, callable_to_apply=None, apply_correction_factor=False,
+                 correction_factor_dont_change_default_for_legacy_reasons=3.6142705042):
         r"""
         Please see deprecated class `InvNoiseCovFromPs` as well.
         The call method of this class implements
@@ -434,10 +435,15 @@ class NoiseCovarianceFromPs:
         :param data_grid:             The real space data grid to get the wavevectors.
         :param callable_to_apply:     A callable to apply the noise power spectrum and corresponding weights in Fourier
                                       space. For example, lambda x: x**-1 for an inverse power spectrum.
+        :param apply_correction_factor: If true, applies a correction factor to the power spectrum to get the right
+                                        data variance for GW150914; somewhere along the lines I messed up some
+                                        Fourier factors. Don't use in new code and remove in a few commits.
+                                        The correction factor can be calculated as variance expected from full psd
+                                        (with correction_factor ==1) divided by data variance.
         """
-
-        self.one_sided_noise_ps = one_sided_noise_ps / 3.6142705042 # needed to the correct data variance...
-        # :ToDo: Recalibrate welch average with my hartley transforms, seems to be wrong right now by this factor.
+        self.one_sided_noise_ps = one_sided_noise_ps.copy()
+        if apply_correction_factor:
+            self.one_sided_noise_ps /= correction_factor_dont_change_default_for_legacy_reasons # needed to the correct data variance in old versions
         self.apply_callable = callable_to_apply
         self.h_grid = data_grid.harmonic_grid
         self.k = self.h_grid.mode_lengths
@@ -462,10 +468,27 @@ class NoiseCovarianceFromPs:
         self.iuH = lambda p: bw_hartley(p, norm="ortho")
 
         expected_var = np.sum(self.full_noise_ps * self.dk)
-        print("Initiating noise covariance. σ^2 = ∫ ps(k) dk = ", expected_var,
-              ". Callable to be applied: callable(2)=", self.apply_callable(2))
+        print("may I suggest the correction factor ", expected_var/ 5.381648179848571)
+        print(
+            f"\nInitialing noise covariance based on a power spectrum with total area σ^2 = ∫ ps(k) dk ~ "
+            f"{expected_var:.15f}."
+            f"\nApplying callable {_callable_repr(self.apply_callable)}"
+        )
 
     def __call__(self, p):
         fourier_input = self.uH(p)  # An i.i.d. variable in standard DFT order [0, +1, +2, ..., +N/2, -N/2+1, ..., -1.]
         kernel = self.apply_callable(self.full_noise_ps * self.h_vol)
         return self.iuH(kernel * fourier_input)
+
+
+def _callable_repr(f):
+    test_val = 2
+    val = f(test_val)
+    if val == 0.5:
+        return "lambda x: x**(-1)"
+    elif val == 2**0.5:
+        return "lambda x: x**(1/2)"
+    elif val == 2**(-0.5):
+        return "lambda x: x**(-1/2)"
+    else:
+        return "<unknown callable>"

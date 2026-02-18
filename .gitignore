@@ -37,15 +37,22 @@ phase_II/nifty_re_playground/re_extra_pipe_3_151225_6
 phase_II/nifty_re_playground/re_extra_pipe_3_151225_7
 phase_II/nifty_re_playground/re_pipe_3_broken_power_law
 phase_II/fast_wigner_function/wigner_function_examples
+phase_II/nifty_re_playground/re_pipe_3_broken_power_law_debug
+phase_II/nifty_re_playground/re_pipe_3_broken_power_law_debug_debug
+phase_II/nifty_re_playground/re_pipe_1_debug
+phase_II/nifty_re_playground/re_pipe_2_debug
 
 phase_III/sde1
 phase_III/sde1_with_fw_model_log
 phase_III/signal_reconstruction_sde
+phase_III/signal_reconstruction_sde_DEBUG
+phase_III/signal_reconstruction_sde_DEBUG_DEBUG
 phase_III/sde2
 phase_III/sde3
 phase_III/sde4
 phase_III/sde5
 phase_III/sde6
+phase_III/STRAIN_GW150914_H1/
 
 
 # Ignore OS files

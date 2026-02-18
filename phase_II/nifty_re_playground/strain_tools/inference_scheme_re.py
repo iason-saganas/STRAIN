@@ -20,7 +20,8 @@ from .maths.calculate_pseudoinverse import find_penrose_moore_solution, sample_f
 from .models.custom_correlated_field import CustomCorrelatedFieldMaker
 
 
-__all__ = ["InferenceSchemeRe", "analyze_kl_callback", "plot_welch_averaged_ps", "get_welch_averaged_ps"]
+__all__ = ["InferenceSchemeRe", "analyze_kl_callback", "plot_welch_averaged_ps", "get_welch_averaged_ps",
+           "kl_sampling_rate"]
 
 def join_k_arrays(harmonic_grid):
     """
@@ -55,14 +56,14 @@ def get_welch_averaged_ps(interpolate_over_k_grid=None):
     return jnp.array(k_lengths), jnp.array(power_spectrum.val)
 
 
-def plot_welch_averaged_ps(ax=None):
+def plot_welch_averaged_ps(ax=None, lb="Empirical estimate"):
     k_lengths, power_spectrum = get_welch_averaged_ps()
     k_lengths = k_lengths[1:]  # remove 0-mode for simplicity
     spectrum_welch = power_spectrum[1:]
     if ax is None:
-        plt.plot(k_lengths, spectrum_welch, label="Empirical estimate", color="black")
+        plt.plot(k_lengths, spectrum_welch, label=lb, color="black")
     else:
-        ax.plot(k_lengths, spectrum_welch, label="Empirical estimate", color="black")
+        ax.plot(k_lengths, spectrum_welch, label=lb, color="black")
 
 
 def mean_red_chi2(data, d_th_samples, N_inv_op):
@@ -135,6 +136,8 @@ class InferenceSchemeRe:
                                     'vi_state'.
                                     Executed after each global iteration. Default: None.
         """
+        assert (lambda dt: (dt > 0).all() and np.allclose(dt, dt[0]))(np.diff(t))  # check: t array is monotoneous and
+        # equally spaced
 
         # abbreviations: ds := 'data_space' ; ss := 'signal_space'
         self.d = d
@@ -142,26 +145,34 @@ class InferenceSchemeRe:
         self.r_fac = r_fac
         self.key = key
 
-        self.L_ds = jnp.max(t)-jnp.min(t)
+        self.L_ds = t[-1]-t[0]
         self.L_ss = self.L_ds * self.e_fac
 
         self.dist_ds = t[1] - t[0]
         self.dist_ss = self.dist_ds / r_fac
 
         self.n_ds = len(d)
-        self.n_ss = int(self.L_ss / self.dist_ss) + 1  # e.g.: 3 pixels corresponds to 3+1 edges. This is the edges.
+        assert self.n_ds == int(self.L_ds/self.dist_ds) + 1  # 3 intervals correspond to four edges; self.L_ds/self.dist_ds
+        # are the intervals, whereas each datapoint is supported by one edge
+
+        if not isinstance(e_fac, int) or not isinstance(r_fac, int):
+            raise ValueError("e_fac and r_fac should be int for simplicity")
+        self.n_ss = int(self.L_ss / self.dist_ss) # = e_fac*L_ds / (dist_ds/r_fac)
+        # = e_fac*r_fac * L_ds/dist_ds = e_fac*r_fac * (n_ds-1) = e_fac*r_fac * n_ds - e_fac*r_fac
+        self.n_ss += e_fac * r_fac
 
         self.t_ds = t
         self.t_ss = jnp.arange(self.n_ss)*self.dist_ss + t[0]
 
-        if self.e_fac != 1:
-            # self.adjoint_zp = lambda arr, ext_fact: arr[:int(len(arr)/ext_fact+1)]  # TODO: correct cutting?
-            self.adjoint_zp = lambda arr, ext_fact: arr[:self.n_ds]
-        else:
-            self.adjoint_zp = lambda arr, ext_fact: arr  # unit, no extension
+        def adjoint_zp(arr, ext_fact, res_fact):
+            # Takes an extended and more resolved array arr, cuts and downsamples
+            n_large = len(arr)
+            n_small = int(n_large / (ext_fact * res_fact))
+            return arr[::res_fact][:n_small]
+        self.adjoint_zp = adjoint_zp
 
         assert self.t_ds[0] == self.t_ss[0]  # same beginning?
-        assert jnp.all(self.t_ds == self.adjoint_zp(self.t_ss, e_fac)[::r_fac])  # if you cut the extended
+        assert jnp.all(self.t_ds == self.adjoint_zp(self.t_ss, e_fac, r_fac))  # if you cut the extended
         # array up to the max of t_ds and then take make it coarser, do you get the same support points?
 
 
@@ -186,6 +197,7 @@ class InferenceSchemeRe:
         self.amplitude_op = None  # undo calls to amplitude_op and use self.ps instead
         self.ps = None
         self.s_model = None
+        self.data_model_taper = .0
 
         self.inv_N_cov = None  # to build residuals
         self.sqrt_inv_N_cov = None  # the metric
@@ -200,7 +212,7 @@ class InferenceSchemeRe:
         self.init_pos = None
 
 
-    def add_custom_signal_model(self, custom_signal_model: jft.Model):
+    def add_custom_signal_model(self, custom_signal_model: jft.Model, alpha=0.):
         """
 
         custom_signal_model: jft.Model      Needs to have implemented __init__, __call__ and get_model_components
@@ -222,6 +234,8 @@ class InferenceSchemeRe:
         Implement a .get_model_components() method that returns the tuples listed down below.
 
         :param custom_signal_model:  A jft.Model representing the signal.
+        :param alpha:                If a float, data model will downstream be tapered by a tukey window with this
+                                     shape parameter.
         :return:
         """
 
@@ -235,12 +249,13 @@ class InferenceSchemeRe:
         self.amplitude_op = amplitude_op
         self.parameter_choices = parameter_choices
         self.model_prefix = model_prefix
+        self.data_model_taper = alpha
 
 
     def add_cfm_signal_model(self, fluct:tuple, llslope:tuple, flex:tuple | None = None, asper:tuple | None=None,
                              offset_mean:float = 0, offset_std:tuple = (1e-16, 1e-16), model_prefix="s_",
                              add_power_spectrum_template=None, add_peak_model=None, square_iwp=False,
-                             add_cfm_env=False, apply_tukey_window=True):
+                             add_cfm_env=False, alpha=0.):
         """
 
         :param fluct:
@@ -255,6 +270,8 @@ class InferenceSchemeRe:
                                                     FOR BACKWARDS-COMPATIBILITY; INSTEAD PASS A LIST OF OPERATORS VIA
                                                     add_custom_power_ops.
         :param add_peak_model:                      A peak model in power space to be added to the model.
+        :param alpha:                               If a float, data model will downstream be tapered by a tukey window
+                                                    with this shape parameter.
 
         :return:
         """
@@ -315,12 +332,8 @@ class InferenceSchemeRe:
 
         else:
             s_model_fin = cfm_maker.finalize()
-            if apply_tukey_window:
-                s_model = lambda p: s_model_fin(p) * tukey(self.n_ss, alpha=0.3)
-            else:
-                s_model = lambda p: s_model_fin(p)
+            s_model = lambda p: s_model_fin(p) * tukey(self.n_ss, alpha=alpha)
             s_model.domain = s_model_fin.domain
-
 
 
 
@@ -392,24 +405,30 @@ class InferenceSchemeRe:
 
 
     def signal_response(self):
-        if self.r_fac != 1 and self.r_fac != 2:
-            raise ValueError("Non-Unit responses (masks) except for res_fac == 2 not implemented yet.")
+        # if self.r_fac != 1 and self.r_fac != 2:
+        #     raise ValueError("Non-Unit responses (masks) except for res_fac == 2 not implemented yet.")
         if self.s_model is None:
             raise ValueError("No signal model implemented yet, call 'add_cfm_signal_model' or add_custom_signal_model.")
 
         class Response(jft.Model):
-            def __init__(self, signal_model, zp_adj, ext_fac, res_fac):
+            def __init__(self, signal_model, zp_adj, ext_fac, res_fac, alpha, M):
                 self.sm = signal_model
                 self.zp_adj = zp_adj
                 self.ext_fac = ext_fac
                 self.res_fac = res_fac
+                # alpha: taper for tukey window; if 0. not tapered.
+                # M: the number of datapoints
+                self.taper = tukey(M, alpha=alpha)
                 super().__init__(domain=signal_model.domain)
 
             def __call__(self, xi):
                 model_values_on_long_domain = self.sm(xi)
-                return self.zp_adj(model_values_on_long_domain, self.ext_fac)[::self.res_fac]
+                downsampled_and_cut = self.zp_adj(model_values_on_long_domain, self.ext_fac, self.res_fac)
+                return self.taper * downsampled_and_cut
 
-        s_prime = Response(signal_model=self.s_model, zp_adj=self.adjoint_zp, ext_fac=self.e_fac, res_fac=self.r_fac)
+        print("Using alpha shape parameter of ", self.data_model_taper, " for signal response")
+        s_prime = Response(signal_model=self.s_model, zp_adj=self.adjoint_zp, ext_fac=self.e_fac, res_fac=self.r_fac,
+                           alpha=self.data_model_taper, M=self.n_ds)
 
         return s_prime
 
@@ -426,12 +445,12 @@ class InferenceSchemeRe:
                              "likely want to provide both, eitherwise wrong metric in Gaussian likelihood.")
 
         if inverse_noise_op is None:
-            print("Using DIAGONAL noise operators.")
+            print("\nUsing DIAGONAL noise operator.")
             # Both operators were not provided => Diagonal noise covariance
             self.inv_N_cov = lambda x: x/noise_var_level
             self.sqrt_inv_N_cov = lambda x: x/jnp.sqrt(noise_var_level)
         else:
-            print("Using provided inv_N_cov and sqrt_inv_N_cov.")
+            print("\nUpdating inference noise model with provided N**(-1) and N**(-1/2)!")
             # Both operators were correctly provided.
             self.inv_N_cov = inverse_noise_op
             self.sqrt_inv_N_cov = sqrt_inverse_noise_op
@@ -849,7 +868,8 @@ class InferenceSchemeRe:
 
     def plot_prior_samples(self, mode:Literal["signal", "signal response", "power spectrum",
     "signal & power spectrum"]="signal",
-                           num=5, plot=True, plot_welch_average=False, plot_data=True, rolling=False):
+                           num=5, plot=True, show=True, plot_welch_average=False, plot_data=True, rolling=False,
+                           custom_ax=None, ):
         """
 
         :param plot_welch_average:
@@ -860,7 +880,11 @@ class InferenceSchemeRe:
         :return:
         """
 
-        _ = plt.figure(figsize=(8,2))
+        if not custom_ax:
+            _ = plt.figure(figsize=(8,4))
+            ax = plt.gca()
+        else:
+            ax = custom_ax
 
         if mode == "signal & power spectrum":
             print("Not plotting 0-mode for visual purposes")
@@ -896,29 +920,32 @@ class InferenceSchemeRe:
         else:
             raise ValueError("Unknown mode '{}'".format(mode))
 
-        for sl in samples:
-            np.savetxt("x_131215.txt", x)
-            np.savetxt("y_131215.txt", sl)
-
-            plt.plot(x, sl)
+        for idx, sl in enumerate(samples):
+            lb = ""
+            if idx == 0:
+                lb = "Prior samples (various colors)"
+            ax.plot(x, sl, label=lb, alpha=0.7)
             if rolling:
-                _ = plt.figure(figsize=(8, 2))
+                _ = plt.figure(figsize=(8, 4))
+                ax = plt.gca()
                 if plot_welch_average:
-                    plot_welch_averaged_ps()
-                    plt.loglog()
+                    plot_welch_averaged_ps(ax=ax)
+                    ax.loglog()
                 if plot_data:
-                    plt.plot(self.t_ds, self.d, label="data", color="orange")
-                thesis_plot(xl=xl, yl=yl, title=f"Prior samples: {mode}")
+                    ax.plot(self.t_ds, self.d, label="data", color="black")
+                if show:
+                    thesis_plot(mode="longer", xl=xl, yl=yl, title=f"Prior samples: {mode}")
 
 
         if not rolling:
             if plot_welch_average:
-                plot_welch_averaged_ps()
+                plot_welch_averaged_ps(ax=ax)
             if mode == "power spectrum":
-                plt.loglog()
+                ax.loglog()
             if plot_data:
-                plt.plot(self.t_ds, self.d, label="data", color="orange")
-            thesis_plot(xl=xl, yl=yl, title=f"Prior samples: {mode}", show=True, close=True)
+                ax.plot(self.t_ds, self.d, label="data", color="orange")
+            if show:
+                thesis_plot(mode="longer", xl=xl, yl=yl, title=f"Prior samples: {mode}", show=True, close=True)
 
 
     def _plot_power_spectrum_and_sample(self, plot_welch_average):
@@ -960,29 +987,48 @@ class InferenceSchemeRe:
         plt.show()
 
 
-    def plot_posterior_signal(self, print_posterior_parameters=False, over_full_signal_space=False, plot_nrt=False,
+    def plot_posterior_signal(self, print_posterior_parameters=False, over_full_signal_space=False,
+                              plot_default_nrt=False, maxL_template_xy=None,
                               plot_data=True, **kwargs):
         _, signal_mean_std_ss, _ = (
             self.get_posterior_statistics(print_posterior_parameters))
 
         _ = plt.figure(figsize=(8,4))
 
-        if not over_full_signal_space:
-            N = len(self.t_ds)
-            tmp1 = signal_mean_std_ss[0]
-            tmp2 = signal_mean_std_ss[1]
-
-            signal_mean = tmp1[:N]
-            signal_std = tmp2[:N]
+        signal_mean = signal_mean_std_ss[0]
+        signal_std = signal_mean_std_ss[1]
+        if over_full_signal_space:
+            time = self.t_ss
+        else:
             time = self.t_ds
 
-            res = np.mean(np.abs(signal_mean - self.d))
-            print("<s_mean - d>=", res)
+            xi_samples = self.posterior_xi_samples
+            data_model = self.signal_response()
+            data_model_samples = [data_model(xi) for xi in xi_samples]
+            data_model_mean = np.mean(np.array(data_model_samples), axis=0)
+            data_model_std = np.std(np.array(data_model_samples), axis=0)
 
-        else:
-            signal_mean = signal_mean_std_ss[0]
-            signal_std = signal_mean_std_ss[1]
-            time = self.t_ss
+            # signal_mean = self.adjoint_zp(signal_mean, ext_fact=self.e_fac, res_fact=self.r_fac)
+            signal_mean = data_model_mean
+            # signal_std = self.adjoint_zp(signal_std, ext_fact=self.e_fac, res_fact=self.r_fac)
+            signal_std = data_model_std
+
+        # if not over_full_signal_space:
+        #     N = len(self.t_ds)
+        #     tmp1 = signal_mean_std_ss[0]
+        #     tmp2 = signal_mean_std_ss[1]
+        #
+        #     signal_mean = tmp1[:N]
+        #     signal_std = tmp2[:N]
+        #     time = self.t_ds
+        #
+        #     res = np.mean(np.abs(signal_mean - self.d))
+        #     print("<s_mean - d>=", res)
+        #
+        # else:
+        #     signal_mean = signal_mean_std_ss[0]
+        #     signal_std = signal_mean_std_ss[1]
+        #     time = self.t_ss
 
         if plot_data:
             plt.plot(self.t_ds, self.d, label="Data", color="orange")
@@ -994,10 +1040,17 @@ class InferenceSchemeRe:
                          color=light_blue,
                          alpha=0.7)  # transparency
 
+        # shaded 2-sigma region
+        plt.fill_between(time,
+                         signal_mean - 2*signal_std,
+                         signal_mean + 2*signal_std,
+                         color=light_blue,
+                         alpha=0.4)  # transparency
+
         # plot the mean line on top
         plt.plot(time, signal_mean, color=blue, label=r"Reconstructed signal", lw=2)
 
-        if plot_nrt:
+        if plot_default_nrt:
             nrt_strain_values = np.loadtxt("/Users/iason/PycharmProjects/STRAIN/data/data_txt/num_rel_template_strain_values.txt") * 1e19
             nrt_time_values = np.loadtxt("/Users/iason/PycharmProjects/STRAIN/data/data_txt/num_rel_template_time_values.txt")
             nrt_time_values = nrt_time_values - nrt_time_values[0] + 15
@@ -1006,6 +1059,10 @@ class InferenceSchemeRe:
 
             plt.plot(nrt_time_values[:go_until], nrt_strain_values[:go_until], label="LIGO Template",
                      color=red)
+
+        if maxL_template_xy is not None:
+            maxL_template_x, maxL_template_y = maxL_template_xy
+            plt.plot(maxL_template_x, maxL_template_y, "-", label="Maximum likelihood template", color=red)
 
         thesis_plot(**kwargs, mode="longer")
 
@@ -1151,7 +1208,7 @@ class InferenceSchemeRe:
             sl = N_sqrt(xi)
             noise_samples.append(sl)
 
-        print("Mean cross variance of samples: Var(sl) = ", np.mean(np.var(noise_samples, axis=0)), " (over 500 samples)")
+        print("\nMean cross variance of noise samples: Var(sl) = ", np.mean(np.var(noise_samples, axis=0)), " (over 500 samples)")
         if show:
             for sl in noise_samples[:num]:
                 plt.plot(self.t_ds, sl)
@@ -1164,9 +1221,9 @@ class InferenceSchemeRe:
             thesis_plot("basic")
 
 
-    def calculate_and_plot_penrose_xi(self, itr=10_000, plot=True, reload_from_cache=False):
+    def calculate_and_plot_penrose_xi(self, itr=10_000, plot=True, reload_from_cache=False, fn="my_penrose_xi.txt"):
         # Only use reload_from_cache if you know what you are doing!!!
-        penrose_xi = find_penrose_moore_solution(itr, pipe=self, reload_from_cache=reload_from_cache, filename="my_penrose_xi.txt")
+        penrose_xi = find_penrose_moore_solution(itr, pipe=self, reload_from_cache=reload_from_cache, filename=fn)
         if plot:
 
             mean_ps = self.get_posterior_statistics(moment="mean", quantity="power spectrum full")
@@ -1260,10 +1317,22 @@ def analyze_kl_callback(out_name, max_kl_iterations, lh, samples, vi_state, ps_o
     fw_model_folder = p + "/fw_model/"
     os.makedirs(fw_model_folder, exist_ok=True)
 
-    if not ps_op:
+    invalid_ps = False
+
+    if ps_op is None:
+        invalid_ps = True
+    else:
+        try:
+            test_eval = ps_op(samples[0])  # use valid input
+            invalid_ps = jnp.any(jnp.isnan(test_eval))
+        except Exception:
+            invalid_ps = True
+
+    if invalid_ps:
         plt.plot(d_th_mean)
         usual_plot(xl="Index", yl="Value", title="Mean forward model evaluation", show=False, close=False)
         plt.savefig(fw_model_folder+f"iter_{kl_iteration_number}.png", dpi=100)
+        plt.close()
     else:
         ps_mean, ps_std = jft.mean_and_std(
             tuple(ps_op(xi) for xi in samples)

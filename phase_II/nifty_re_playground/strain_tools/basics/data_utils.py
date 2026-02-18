@@ -1,23 +1,38 @@
 from dataclasses import dataclass
-from gwpy.timeseries import TimeSeries
-from gwosc.datasets import event_gps
-from gwosc.locate import get_event_urls
 import matplotlib.pyplot as plt
 import requests
 import jax.numpy as jnp
+from scipy.signal import butter, filtfilt
 from scipy.signal.windows import tukey
 import numpy as np
-import os
 from typing import Literal, Optional, Any
 import re
 
-from .common_utils import unpickle_me_this
+from .plotting import *
+
+# LIGO imports
+from pesummary.gw.fetch import fetch_open_samples
+from pesummary.io import read
+from gwosc.datasets import find_datasets
+from gwpy.timeseries import TimeSeries
+from gwosc.datasets import event_gps
+from gwosc.locate import get_event_urls
+apply_thesis_style()
+
+import os
+
+from phase_II.utils.helpers import raise_warning
+
+
+
+from .common_utils import unpickle_me_this, Logger
 from ..basics.welch_average import calculate_welch_average
 
+
+
 __all__ = [ "get_sample_data", "iterative_midpoint_average", "power_analyze_re", "unpack_centered",
-            "convert_gps_to_seconds", "DEPR_get_strain_data", "get_time_and_strain_from_disc",
-            "whiten"
-            ]
+            "convert_gps_to_seconds", "DEPR_get_strain_data", "get_strain_from_disc",
+            "whiten", "bandpass", "get_waveform_template"]
 
 
 def get_sample_data(norm=1e19, time_window=(15,17), end_points_small=False, taper=False):
@@ -100,7 +115,7 @@ def iterative_midpoint_average(data, n_iter=2, plot=False):
         plt.legend()
         plt.show()
 
-    print("Standard deviation of the data about middle line is: {:.3f} ".format(width), ", using iterative "
+    print("Standard deviation of the data about middle line is: {:.3f}".format(width), ", using iterative "
                                                                                         "midpoint averaging.")
     return middle, width
 
@@ -174,7 +189,8 @@ def convert_gps_to_seconds(gps_times, t0=None):
 
 def _get_strain_data(gps_center, absolute_path, desired_duration=32, unpack=True):
     """
-    Get strain data based on HDF5 objects saved on the disk.
+    Get strain data based on HDF5 objects saved on the disk. Assuming sampling rate can be expressed as some
+    integer per second, returns a time array exactly of length desired_duration and the corresponding strain.
 
     :param gps_center:              A float around which the series is centered. If None, uses initial time.
     :param absolute_path:           The absolute path of the HDF5 file.
@@ -191,16 +207,39 @@ def _get_strain_data(gps_center, absolute_path, desired_duration=32, unpack=True
     base_time = np.array(strain_series.times)
     if gps_center:
         time = base_time - gps_center
-        left_time_bound = -desired_duration/2
-        right_time_bound = +desired_duration/2
     else:
         time = base_time - base_time[0]
-        left_time_bound = 0
-        right_time_bound = desired_duration
 
-    to_keep = np.where((time >= left_time_bound) & (time <= right_time_bound))
-    time_masked = time[to_keep]
-    strain_masked = strain[to_keep]
+    dt = base_time[1] - base_time[0]
+    fs = 1 / dt
+    n_samples_tot = int(desired_duration * fs) + 1
+
+    if gps_center:
+        center_idx = np.argmin(np.abs(base_time - gps_center))
+        if n_samples_tot % 2 == 1:
+            n_half_left = (n_samples_tot - 1) // 2
+            n_half_right = n_half_left
+        else:
+            n_half_left = n_samples_tot // 2 - 1
+            n_half_right = n_samples_tot // 2
+
+        start_idx = center_idx - n_half_left
+        end_idx = center_idx + n_half_right + 1
+    else:
+        start_idx = 0
+        end_idx = n_samples_tot
+
+    # handle boundaries
+    if start_idx < 0:
+        start_idx = 0
+        end_idx = n_samples_tot
+    if end_idx > len(base_time):
+        end_idx = len(base_time)
+        start_idx = end_idx - n_samples_tot
+
+    time_masked = time[start_idx:end_idx]
+    strain_masked = strain[start_idx:end_idx]
+
     return time_masked, strain_masked
 
 
@@ -270,23 +309,46 @@ def whiten(y:np.array, amp:np.array, tapering_function=lambda d: tukey(M=len(d),
     return np.fft.ifft(whitened_y_harmonic).real
 
 
+def bandpass(x, y, bp=(35, 350)):
+    """
+    Bandpasses a time series in the given `bp` range using a butterworth filter.
+    Lifted from LIGO documentation example:
+    https://colab.research.google.com/github/gwosc-tutorial/Data_Guide/blob/master/Guide_Notebook.ipynb#scrollTo=KyxFwb6dhuDc
+    :param x:   Times
+    :param y:   Strain values
+    :param bp:  Frequency range
+    :return:
+    """
+    dx = x[1] - x[0]
+    fs = 1/dx
+    low, high = bp
+    res = butter(4, [low * 2. / fs, high * 2. / fs], btype='band', output='ba')
+    bb, ab = res[0], res[1]
+    normalization = np.sqrt((high - low) / (fs / 2))
+    strain_bp = filtfilt(bb, ab, y) / normalization
+    return strain_bp
+
+
 @dataclass
 class AuxData:
     ps_welch: Optional[Any] = None
     freqs: Optional[Any] = None
     win: Optional[Any] = None
+    meta: Optional[Any] = None
 
 
 @dataclass
 class EventData:
     time: Any
     strain: Any
-    gps: float
-    gwpy: Any
+    gps_center: float
+    gps_event: float
+    gwpy: Optional[Any] = None
     # optional whitening / Welch properties
     event_time: Optional[Any] = None
     event_strain: Optional[Any] = None
     event_strain_white: Optional[Any] = None
+    event_strain_white_bp: Optional[Any] = None
     aux: Optional[AuxData] = None
 
 
@@ -325,12 +387,13 @@ def _get_window_containing_zero(WINDOWS):
     return matches[0]  # (event_time, strain_time)
 
 
-def get_time_and_strain_from_disc(event_name="GW150914", detector:Literal["H1", "L1"]= "H1",
-                                  data_duration:Literal["32sec", "4096sec"]="4096sec", center_on_event=True,
-                                  desired_duration=32, add_whitened_data=False, **kwargs):
+def get_strain_from_disc(event_name="GW150914", detector:Literal["H1", "L1"]= "H1",
+                         data_duration:Literal["32sec", "4096sec"]="4096sec", center_on_event=True,
+                         custom_center=None,
+                         desired_duration=32, add_whitened_data=False, **kwargs):
     """
     Given the unique name of an event like GW150914, retrieves time and strain values as well as the corresponding
-    gwpy TimeSeries class. All of these are stored as properties of a dict:
+    gwpy TimeSeries class stored in the data path. All of these are stored as properties of a dict:
 
     GW150914 =  get_time_and_strain_from_disc()
 
@@ -342,9 +405,10 @@ def get_time_and_strain_from_disc(event_name="GW150914", detector:Literal["H1", 
         if add_whitened_data, the data is subdivided into windows from which the Welch average is calculated.
         Following properties are then additionally provided:
 
-        GW150914.event_time             The times of the welch average window containing the event
-        GW150914.event_strain           The strain of the welch average window containing the event
-        GW150914.event_strain_white     The whitened strain of the welch average window containing the event
+        GW150914.event_time                 The times of the welch average window containing the event
+        GW150914.event_strain               The strain of the welch average window containing the event
+        GW150914.event_strain_white         The whitened strain of the welch average window containing the event
+        GW150914.event_strain_white_bp      As GW150914.event_strain_white but bandpassed in (30, 400) Hz.
 
         GW150914.aux            A class containing the following attributes:
                                     GW150914.aux.ps_welch   :  The welch average on the full harmonic domain
@@ -387,11 +451,18 @@ def get_time_and_strain_from_disc(event_name="GW150914", detector:Literal["H1", 
         raise ValueError(f"Expected exactly one match, found {len(matches)}: {matches}")
 
     match = matches[0]
-    gps_time = _get_event_gps_from_readme(event_name, path_to_readme=os.path.join(base_path, readme))
-    if not center_on_event:
-        gps_time = None
+    gps_event = _get_event_gps_from_readme(event_name, path_to_readme=os.path.join(base_path, readme))
+    if center_on_event and custom_center:
+        raise ValueError("Only one of center_on_event or custom_center can be specified")
+    if custom_center is None:  # custom center takes prevalence over center_on_event = True
+        if not center_on_event:
+            gps_center = None
+        else:
+            gps_center = gps_event
+    else:
+        gps_center = custom_center
 
-    kwargs_unpack = {'desired_duration': desired_duration, 'unpack': True, 'gps_center': gps_time,
+    kwargs_unpack = {'desired_duration': desired_duration, 'unpack': True, 'gps_center': gps_center,
      'absolute_path': os.path.join(base_path, match)}
 
     kwargs_gwpy_object = kwargs_unpack.copy()
@@ -400,11 +471,27 @@ def get_time_and_strain_from_disc(event_name="GW150914", detector:Literal["H1", 
     times, strain = _get_strain_data(**kwargs_unpack)
     gwpy_object = _get_strain_data(**kwargs_gwpy_object)
 
-    obj = EventData(time=times, strain=strain, gps=gps_time, gwpy=gwpy_object)
+    if gps_center is None:
+        gps_center = np.float64(gwpy_object.times[0])
+
+    obj = EventData(time=times, strain=strain, gps_center=gps_center, gps_event=gps_event, gwpy=gwpy_object)
 
     if add_whitened_data:
+
+        welch_kwargs = {
+            "L": 2,
+            "final_average_call": jnp.mean,
+            "tapering_function": lambda d: tukey(M=len(d), alpha=0.1, sym=True)
+        }
+
+        for key, value in kwargs.items():
+            if key in welch_kwargs:
+                welch_kwargs[key] = value
+            else:
+                raise_warning(f"You were trying to set the argument `{key}`, but default value is used instead")
+
         freqs, ps, windows = calculate_welch_average(
-            x=times, y=strain, output_on_full_harmonic_domain=True, **kwargs
+            x=times, y=strain, output_on_full_harmonic_domain=True, **welch_kwargs
         )
 
         # get N from first window
@@ -430,10 +517,134 @@ def get_time_and_strain_from_disc(event_name="GW150914", detector:Literal["H1", 
         # event_time, event_strain = _get_window_containing_zero(windows)
 
         event_strain_whitened = whiten(y=event_strain, amp=jnp.sqrt(ps))
+        event_strain_whitened_bp = bandpass(x=event_time, y=event_strain_whitened, bp=(30, 400))
 
         obj.event_time = event_time
         obj.event_strain = event_strain
         obj.event_strain_white = event_strain_whitened
-        obj.aux = AuxData(ps_welch=ps, freqs=freqs, win=windows)
+        obj.event_strain_white_bp = event_strain_whitened_bp
+        obj.aux = AuxData(ps_welch=ps, freqs=freqs, win=windows, meta=welch_kwargs)
 
+    return obj
+
+
+def _get_waveform_data(e, s=False, f=False):
+    """
+    Downloads waveform data from the event `e` if the data does not already exist in a folder
+    `data_pickle_or_hdf5/data_for_waveforms`.
+    :param e:          The event name
+    :param s:          If true, does not print aux information to the console.
+    :param f:          Whether to force an online fetch instead of looking for local data first.
+    :return:
+    """
+    logger = Logger(silent=s)
+
+    # Check if data exists locally; online fetcher will re-download file if it already exists and append a random
+    # string in the beginning
+    abspath = "/Users/iason/PycharmProjects/STRAIN/data/data_pickle_or_hdf5/data_for_waveforms/"
+    files = os.listdir(abspath)
+    matches = [f for f in files if e in f]
+
+    if len(matches) != 0 and not f:
+        # local data exists
+        logger.print(f"\nWaveform query for {e}. Found {len(matches)} local matche(s):")
+        for idx, match in enumerate(matches):
+            logger.print(f"\t{idx}: \t{match}")
+        if len(matches) == 1:
+            # Duplicates do not exist
+            match = matches[0]
+            logger.print("Using ", match)
+        else:
+            # Duplicates exist
+            raise_warning("Duplicate waveform data detected; using last one of list; consider deleting the other files")
+            match = matches[-1]
+            logger.print("Using ", match)
+
+        fl = abspath + match
+    else:
+        # Online fetch is forced or no local matches found
+
+        logger.print(f"\nWaveform query for {e}. No local matches found or force online fetch was set to True; "
+                     f"fetching data from database")
+
+        all_gw_events = find_datasets(type='event', match="GW")
+
+        matches = [event for event in all_gw_events if e in event]
+        if len(matches) == 0:
+            raise FileNotFoundError("No waveform matches found online for query ", e)
+        else:
+            logger.print(f"Waveform query for {e}. Found {len(matches)} matches corresponding to a GW event. Fetching "
+                         f"waveform data for newest version of these:")
+            for idx, match in enumerate(matches):
+                logger.print(f"\t{idx}: \t{match}")
+            logger.print("\n")
+            match = matches[-1]
+
+        logger.print("...Downloading")
+        fl = fetch_open_samples(match, unpack=False, read_file=False, delete_on_exit=False, outdir=abspath, verbose=True)
+        logger.print("Done")
+
+    data = read(fl, disable_prior=True)
+    return data
+
+
+def get_waveform_template(event_name, gps_center, detector: Literal["L1", "H1"], silent=False, force_online_fetch=False,
+                          model_approximant: Literal["SEOBNRv4PHM", "Mixed", "IMRPhenomXPHM"] = "SEOBNRv4PHM",
+                          f_low=10., f_ref=10., delta_t=1. / 4096.,
+                          plot=False, custom_ax=None, show=True):
+    """
+    Using PESummary to produce the waveform from the sample with the largest likelihood given a waveform
+    model bank `model_approximant`. Use, e.g., like:
+
+        NR_template = get_strain_waveform('GW150914', 1126259462.4, detector='H1',
+                                          plot=True, model_approximant='SEOBNRv4PHM')
+        plt.plot(NR_template.times, NR_template.strain)
+
+    :param event_name:          Event name ID, like 'GW150914'
+    :param gps_center:          The supposed gps center of the event.
+    :param detector:            The detector onto which to project the waveform.
+    :param silent:              If true, does not print aux information.
+    :param force_online_fetch:  If true, instead of looking for local data, fetches data from database.
+
+    For an explanation of the following parameters please refer to the documentation of
+    `pesummary.utils.samples_dict.py > SamplesDict.td_waveform` or to the notebook
+    `phase_III/waveform_extractions_example.ipynb`.
+
+    :param f_low:           The lower frequency at which to evaluate the waveform.
+    :param f_ref:           Some kind of reference frequency.
+    :param delta_t:         Desired time resolution
+    :param model_approximant:     Some kind of approximant used for getting the numerical relativity template.
+    :return:
+    """
+    logger = Logger(silent=silent)
+    data = _get_waveform_data(e=event_name, s=silent, f=force_online_fetch)
+
+    model_banks = data.labels
+    logger.print("Waveform model bank names: ", *model_banks)
+    logger.print("Using ", model_approximant, " model.")
+
+    waveform_samples = data.samples_dict[f"C01:{model_approximant}"]
+    maxL_projected_waveform = waveform_samples.maxL_td_waveform(model_approximant,
+                                                                delta_t,
+                                                                f_low,
+                                                                f_ref=f_low,
+                                                                project=detector)
+
+    maxL_merger_time = data.samples_dict[f"C01:{model_approximant}"].maxL[f"{detector}_time"][0]
+
+    waveform_times = np.array(maxL_projected_waveform.times) - gps_center
+    waveform_strain = np.array(maxL_projected_waveform.value) * 1e19
+
+    logger.print("Input gps center: ", gps_center,
+                 " maximum likelihood merger time from template: ", maxL_merger_time)
+
+    if plot:
+        if custom_ax is None:
+            _ = plt.figure(figsize=(8., 2.))
+            plt.plot(waveform_times, waveform_strain, label="Projected NR template", color="black")
+            thesis_plot(mode="basic", yl=r"$h(t)$ $\mathrm{[10^{-19}]}$")
+        else:
+            custom_ax.plot(waveform_times, waveform_strain, label="Projected NR template", color="black")
+
+    obj = EventData(time=waveform_times, strain=waveform_strain, gps_center=gps_center, gps_event=gps_center)
     return obj

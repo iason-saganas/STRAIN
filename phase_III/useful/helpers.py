@@ -102,7 +102,10 @@ def plot_posterior(key, times, operator_list, label_list, latent_samples, plot_p
         if plot_prior_samples:
             for _ in range(3):
                 key, subkey = jax.random.split(key)
-                rnd_domain = jft.random_like(key, operator.domain)
+                try:
+                    rnd_domain = jft.random_like(key, operator.domain)
+                except AttributeError:
+                    continue
                 prior_sample = operator(rnd_domain)
 
                 if jnp.max(jnp.abs(prior_sample)) < 2 * jnp.max(jnp.abs(mean_op)):

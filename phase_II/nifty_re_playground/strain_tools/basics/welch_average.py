@@ -49,19 +49,23 @@ __all__ = ["calculate_welch_average"]
 #     # if instead input is not from non-ortho fw_hartley: ~ √N I think.
 
 
-def power_analyze_re_hartley(y_values):
+def power_analyze_re(y_values, fourier_transform=lambda y: fw_hartley(y, norm="ortho")):
     """
     Returns an estimate of the power spectrum by absolute squaring the fourier transform.
     :param y_values: A real space periodic array.
     :return:
     """
-    return jnp.abs(fw_hartley(y_values, norm="ortho"))**2
+    return jnp.abs(fourier_transform(y_values))**2
 
 
 def calculate_welch_average(x, y, L=2, leave_out=None, debug=False, output_on_full_harmonic_domain=False,
                             final_average_call=jnp.mean,
                             tapering_function=lambda d: tukey(M=len(d), alpha=0.1, sym=True)):
     """
+
+    WARNING: If you use the Welch-average in its current form on non-tapered data, you will introduce a bias since
+    the window energy is currently not accounted for.
+
     Subdivides data into little windows of length L, tapers, takes their fourier-transform absolutely squared 
     and performs an average over all windows.
 
@@ -87,7 +91,6 @@ def calculate_welch_average(x, y, L=2, leave_out=None, debug=False, output_on_fu
                                     first_window = WINDOWS[0]
                                     time_in_first_window, strain_in_first_window = first_window
     """
-    print("Start: Calculating welch average")
     L_global = jnp.max(x)-jnp.min(x)
     if L_global < L:
         raise ValueError(f"Length of windows {L} larger than length of dataset {L_global}.")
@@ -116,7 +119,7 @@ def calculate_welch_average(x, y, L=2, leave_out=None, debug=False, output_on_fu
     lf_edges_ds2, r_edges_ds2 = get_lr_edges(x_in_strip_2, y_strip_2, L, even=check_even)
 
     num = len(lf_edges_ds1) + len(lf_edges_ds2) if leave_out is not None else len(lf_edges_ds1)-1
-    print(f"\nConstructing {num} windows over which we average.\n")
+    print(f"\tConstructing {num} windows over which we average.")
 
     if debug:
         welch_average_debug_plot_II(x_in_strip_1, y_strip_1, x_in_strip_2, y_strip_2,
@@ -142,28 +145,34 @@ def calculate_welch_average(x, y, L=2, leave_out=None, debug=False, output_on_fu
     if debug:
         welch_average_debug_plot_III(collection_of_small_datasets_strain, collection_of_small_datasets_times, x_in_strip_1, y_strip_1, x_in_strip_2, y_strip_2)
 
+    collection_of_small_datasets_strain_windowed = [d-jnp.mean(d) for d in collection_of_small_datasets_strain]
     collection_of_small_datasets_strain_windowed = [d * tapering_function(d) for d in
-                                                    collection_of_small_datasets_strain]
+                                                    collection_of_small_datasets_strain_windowed]
 
     if debug:
         welch_average_debug_plot_IV(collection_of_small_datasets_times, collection_of_small_datasets_strain,
                                     collection_of_small_datasets_strain_windowed)
 
+    little_time_example = collection_of_small_datasets_times[0]
+    n_dtps = len(little_time_example)
+    dx = little_time_example[1] - little_time_example[0]
 
-    n_dtps = len(collection_of_small_datasets_times[0])
-    dx = L/(n_dtps-1)
-
-    F = lambda arr: fw_hartley(arr)
+    # F = lambda arr: fw_hartley(arr)
+    F = lambda arr: jnp.fft.fft(arr) * dx
 
     data_fields = collection_of_small_datasets_strain_windowed
 
-    empirical_power_spectra = jnp.array([power_analyze_re_hartley(y_values=h) for h in data_fields])
+    empirical_power_spectra = jnp.array([power_analyze_re(y_values=h, fourier_transform=F) for h in data_fields])
     k = jnp.fft.fftfreq(n=n_dtps, d=dx)
-    ps = final_average_call(empirical_power_spectra, axis=0)
+    ps = final_average_call(empirical_power_spectra, axis=0) * 1 / L
 
     S = collection_of_small_datasets_strain_windowed
     T = collection_of_small_datasets_times
     WINDOWS = jnp.array(list(zip(T,S)))
+
+    print("\tMean variance of tapered windows:",
+          jnp.mean(jnp.array([jnp.var(el) for el in collection_of_small_datasets_strain_windowed])))
+    print("\tCompare with area under welch ps: ", (k[1]-k[0])*jnp.sum(ps))
 
     if output_on_full_harmonic_domain:
         return k, ps, WINDOWS

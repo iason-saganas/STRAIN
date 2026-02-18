@@ -72,12 +72,12 @@ raise_warning("Using welch averaged power spectrum for inference!!! ")
 welch_k, welch_pow_spec = get_welch_averaged_ps()
 
 N_inv = NoiseCovarianceFromPs(one_sided_noise_ps=welch_pow_spec, callable_to_apply=lambda x: x**(-1),
-                                     data_grid=pipe_3.d_dom_real)
+                                     data_grid=pipe_3.d_dom_real, apply_correction_factor=True)
 
 N_sqrt_inv = NoiseCovarianceFromPs(one_sided_noise_ps=welch_pow_spec, callable_to_apply=lambda x: x**(-1/2),
-                                          data_grid=pipe_3.d_dom_real)
+                                          data_grid=pipe_3.d_dom_real, apply_correction_factor=True)
 N_sqrt = NoiseCovarianceFromPs(one_sided_noise_ps=welch_pow_spec, callable_to_apply=lambda x: x**(1/2),
-                                          data_grid=pipe_3.d_dom_real)
+                                          data_grid=pipe_3.d_dom_real, apply_correction_factor=True)
 
 print("Variance of data: " , np.var(pipe_3.d))
 # xi_111225 = np.loadtxt("xi_111225.txt")
@@ -122,7 +122,7 @@ latent_samples = pipe_3.run_inference(kl_iterations=15, use_strict_minimizers=Fa
                                       resume=True, choose_low_kl_starting_pos=False, geoVi=True)
 key = pipe_3.get_current_key()
 
-pipe_3.plot_posterior_signal(plot_nrt=True, print_posterior_parameters=True, over_full_signal_space=False,
+pipe_3.plot_posterior_signal(plot_default_nrt=True, print_posterior_parameters=True, over_full_signal_space=False,
                              plot_data=False,
                              # xlim=(16.35, 16.45),
                              save_fig=False

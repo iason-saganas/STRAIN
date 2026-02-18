@@ -17,10 +17,13 @@ def _02_get_location_of_spikes_from_xi(pipe:InferenceSchemeRe, output_folder:str
     :return:
     """
     output_folder = output_folder + f"/peak_finder/"
-    plots_exist = os.path.isdir(output_folder)
+    plots_exist = False
     if not plots_exist:
         # Create folder
         os.makedirs(os.path.dirname(output_folder), exist_ok=True)
+    for file in os.listdir(output_folder):
+        if "power_spectrum_with_peaks" in file:
+            plots_exist = True
     data_grid = pipe.d_dom_real
     harmonic_signal_grid = pipe.s_dom_harmonic
     signal_distributor = harmonic_signal_grid.power_distributor
@@ -60,9 +63,9 @@ def _02_get_location_of_spikes_from_xi(pipe:InferenceSchemeRe, output_folder:str
         plt.plot(peaks_k, norm_amplitudes_k, color=red, marker="v", markersize=5, linewidth=0,
                  label=r"Peaks found in $\tilde{\xi}_d$")
         plt.loglog()
-        usual_plot(xl="Frequency $f$", yl="Power", show=False, save_fig=True, close=True,
-                   save_path=output_folder+"/power_spectrum_with_peaks",)
 
+        usual_plot(xl="Frequency $f$", yl="Power", show=False, save_fig=True, close=True,
+                   save_path=output_folder+"power_spectrum_with_peaks",)
 
         # Plot in data space
         ps_mean_std, _, _ = pipe.get_posterior_statistics()
@@ -72,7 +75,7 @@ def _02_get_location_of_spikes_from_xi(pipe:InferenceSchemeRe, output_folder:str
 
         plt.plot(pipe.t_ds, pipe.d, label=r"$d_{\mathrm{obs}}$", color="orange")
         plt.plot(pipe.t_ds, posterior_penrose_data.real, color=blue, label=r"Data from smooth $p_n(f)$ and $\tilde{\xi}_d$")
-        usual_plot(save_fig=True, show=False, save_path=output_folder+"/data_comparison_if_penrose_xi", close=True,)
+        usual_plot(save_fig=True, show=False, save_path=output_folder+"data_comparison_if_penrose_xi", close=True,)
 
     return peaks_k, norm_amplitudes_k
 

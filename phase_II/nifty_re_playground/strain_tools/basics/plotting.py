@@ -3,16 +3,15 @@ import numpy as np
 from scipy.ndimage import gaussian_filter, median_filter, uniform_filter
 from skimage.restoration import denoise_tv_chambolle
 import cv2
+from matplotlib import rcParams, RcParams
 import matplotlib.pyplot as plt
 import matplotlib as mpl
 import datetime
 import re
 
-from .common_utils import raise_warning
-
 __all__ = ["usual_plot", "visualize_stress", "thesis_plot", "thesis_multiplot", "red", "light_red", "blue", "light_blue",
            "lighter_blue", "lightest_blue", "green", "light_green", "save_figure", "smooth_matrix", "title_fontsize_pts",
-           "label_fontsize_pts", "tick_label_fontsize", "legend_label_fontsize"]
+           "label_fontsize_pts", "tick_label_fontsize", "legend_label_fontsize", "apply_thesis_style"]
 
 thesis_fontsize_pts = 12
 title_fontsize_pts = 1.6 * thesis_fontsize_pts
@@ -30,20 +29,51 @@ green = (0.23, 0.85, 0.25, 1)
 light_green = (0.23, 0.85, 0.25, 0.4)
 
 plt.style.use("/Users/iason/PycharmProjects/STRAIN/data/style_components/standardStyle.mplstyle")
+STYLE_RC = RcParams(rcParams)
 
 # Standard style extensions
-mpl.rcParams["axes.titlesize"] = title_fontsize_pts
-mpl.rcParams["axes.labelsize"] = label_fontsize_pts
-mpl.rcParams["xtick.labelsize"] = tick_label_fontsize
-mpl.rcParams["ytick.labelsize"] = tick_label_fontsize
-mpl.rcParams["legend.fontsize"] = legend_label_fontsize
-mpl.rcParams["text.usetex"] = False
+# mpl.rcParams["axes.titlesize"] = title_fontsize_pts
+# mpl.rcParams["axes.labelsize"] = label_fontsize_pts
+# mpl.rcParams["xtick.labelsize"] = tick_label_fontsize
+# mpl.rcParams["ytick.labelsize"] = tick_label_fontsize
+# mpl.rcParams["legend.fontsize"] = legend_label_fontsize
+# mpl.rcParams["text.usetex"] = False
+#
+# mpl.rcParams["font.family"] = "Hubballi"
+# mpl.rcParams["mathtext.fontset"] = "custom"
+# mpl.rcParams["mathtext.rm"] = "Hubballi"
+# mpl.rcParams["mathtext.it"] = "Hubballi"
+# mpl.rcParams["mathtext.bf"] = "Hubballi"
 
-mpl.rcParams["font.family"] = "Hubballi"
-mpl.rcParams["mathtext.fontset"] = "custom"
-mpl.rcParams["mathtext.rm"] = "Hubballi"
-mpl.rcParams["mathtext.it"] = "Hubballi"
-mpl.rcParams["mathtext.bf"] = "Hubballi"
+MY_RCPARAMS = RcParams({
+    # figure / axes
+    "axes.titlesize": title_fontsize_pts,
+    "axes.labelsize": label_fontsize_pts,
+    "xtick.labelsize": tick_label_fontsize,
+    "ytick.labelsize": tick_label_fontsize,
+    "legend.fontsize": legend_label_fontsize,
+
+    # text
+    "text.usetex": False,
+    "font.family": "Hubballi",
+    "mathtext.fontset": "custom",
+    "mathtext.rm": "Hubballi",
+    "mathtext.it": "Hubballi",
+    "mathtext.bf": "Hubballi",
+
+    # Legend
+    "legend.handlelength": 0.2,
+    "legend.handleheight": 0.5,
+    "legend.markerscale": 1.0,
+})
+
+STYLE_RC.update(MY_RCPARAMS)  # override style sheet values with values given above
+mpl.rcParams.update(STYLE_RC)  # apply change globally
+
+
+def apply_thesis_style():
+    plt.style.use("/Users/iason/PycharmProjects/STRAIN/data/style_components/standardStyle.mplstyle")
+    mpl.rcParams.update(STYLE_RC)
 
 
 def wrap_latex_label(label, width=20):
@@ -145,6 +175,7 @@ def thesis_multiplot():
 
 def usual_plot(xl=r"Time $t$ $\mathrm{[sec]}$", yl=r"Strain $h$ $\mathrm{[10^{-19}]}$", title=None, xlim=None, ylim=None,
                show=True, close=False, save_fig=False, save_path="", custom_ax=None):
+    from .common_utils import raise_warning
     raise_warning("`usual_plot` will be deprecated, please use `thesis_plot` instead")
     if custom_ax is None:
         ax = plt.gca()

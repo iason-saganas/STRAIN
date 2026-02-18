@@ -22,7 +22,6 @@ lines.color: blue        # Default line color
 # font.family: serif  # Font family
 # font.serif  : .New York
 
-
 # Legend
 legend.loc: best          # Location of the legend ('best', 'upper right', 'lower left', etc.)
 legend.fontsize: 18       # Font size of the legend

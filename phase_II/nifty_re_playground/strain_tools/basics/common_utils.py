@@ -3,9 +3,14 @@ import warnings
 import jax.numpy as jnp
 import nifty.nifty.re as jft
 import jax
+import matplotlib.pyplot as plt
+import numpy as np
+
+from .plotting import *
 
 __all__ = ["unpickle_me_this", "pickle_me_this", "raise_warning", "fw_hartley", "bw_hartley",
-                 "plot_histogram"]
+                 "plot_histogram", "Logger"]
+
 
 def unpickle_me_this(filename: str, absolute_path=False):
     if absolute_path:
@@ -87,7 +92,8 @@ def bw_hartley(Hx, norm="ortho"):
 
 
 
-def plot_histogram(key, mean: float, sigma: float, n_samples: int, mode="Lognormal"):
+def plot_histogram(key, mean: float, sigma: float, n_samples: int, bins=200, mode="Lognormal", apply_func=None,
+                   apply_func_descriptive_string=None):
     """
     Plots a histogram visualizing the moment-matched lognormal transform.
     If `vlines` is provided, vertical lines will be drawn at the specified x-locations.
@@ -95,12 +101,14 @@ def plot_histogram(key, mean: float, sigma: float, n_samples: int, mode="Lognorm
 
     plot_lognormal_histogram(mean=.06, sigma=0.03, n_samples=10000, vlines=[0.023, 0.05], save=True, show=True)
 
-    :param mean:        The mean from which logmean is calculated with logsigma's help.
-    :param sigma:       The sigma from which logsigma is calculated.
-    :param n_samples:   How many samples to plot
+    :param mean:            The mean from which logmean is calculated with logsigma's help.
+    :param sigma:           The sigma from which logsigma is calculated.
+    :param n_samples:       How many samples to plot
+    :param apply_func:      Optional function to apply to each sample.
+    :param apply_func_descriptive_string:   If not None, will be added to the title
     :return:
     """
-    # fig = plt.figure(figsize=(10, 4))
+    fig = plt.figure(figsize=(8., 4.))
     if mode == "Normal":
         print("Normal distrubution")
         op = jft.NormalPrior(mean=mean, std=sigma, name="Normal for Histogram")
@@ -116,9 +124,25 @@ def plot_histogram(key, mean: float, sigma: float, n_samples: int, mode="Lognorm
 
     op_samples = np.array([op(state) for state in rnd_states])
 
-    label = rf"{mode} with $(\mu, \sigma)=$" + f"$({mean}, {sigma})$" if not (mode=="Uniform") else rf"{mode} in " + r"$\mathrm{[0,1]}$"
-    plt.hist(op_samples, bins=200, label=label,
+    tl = rf"{mode} with $(\mu, \sigma)\approx$" + f"$({np.round(mean,2)}, {np.round(sigma,2)})$" if not (mode=="Uniform") else rf"{mode} in " + r"$\mathrm{[0,1]}$"
+    if apply_func is not None:
+        op_samples = apply_func(op_samples)
+        if not apply_func_descriptive_string:
+            tl += "; custom function applied sample-wise!"
+        else:
+            tl += "; " + apply_func_descriptive_string
+    plt.hist(op_samples, bins=bins,
              histtype='step', facecolor='white', color="black")
-
-    plt.show()
+    thesis_plot(mode="longer", xl="Value", yl="Number", title=tl)
     return key
+
+
+class Logger:
+    def __init__(self, silent=False):
+        self.silent = silent
+
+    def print(self, *args):
+        if self.silent:
+            pass
+        else:
+            print(*args)

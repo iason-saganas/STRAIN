@@ -95,7 +95,7 @@ def diffrax_solver(evolution_times, omega, gamma, xi):
 
 class AutoDiffEquationSolver(jft.Model):
     def __init__(self, prefix, reconstruction_times, cfm_sampling_times, omega_cfm, gamma_cfm, xi_cfm, scaling_constant,
-                 solver=rk4, tukey_window=False):
+                 solver=rk4, tukey_window=False, alpha_dont_change_default_for_legacy_reasons=0.3):
 
         self.prefix = prefix
         self.reconstruction_times = reconstruction_times
@@ -131,7 +131,7 @@ class AutoDiffEquationSolver(jft.Model):
         #     self.scaling = lambda *args: 1
 
         if tukey_window:
-            self.win = tukey(len(self.evolution_times), alpha=0.3)
+            self.win = tukey(len(self.evolution_times), alpha=alpha_dont_change_default_for_legacy_reasons)
         else:
             self.win = 1
 
@@ -153,7 +153,7 @@ class AutoDiffEquationSolver(jft.Model):
         return lambda x: jnp.nan, {"none" : 1}, self.prefix
 
 
-class DomainCheckAndMask():
+class DomainCheckAndMask:
     def __init__(self, domain_time, target_time):
         """
         Takes the input and cuts away all points that don't lie exactly within target_time. If the resulting array
