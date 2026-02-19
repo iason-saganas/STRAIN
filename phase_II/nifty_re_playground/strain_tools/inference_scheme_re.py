@@ -56,14 +56,13 @@ def get_welch_averaged_ps(interpolate_over_k_grid=None):
     return jnp.array(k_lengths), jnp.array(power_spectrum.val)
 
 
-def plot_welch_averaged_ps(ax=None, lb="Empirical estimate"):
+def plot_welch_averaged_ps(ax=None, lb="Empirical estimate", **kwargs):
     k_lengths, power_spectrum = get_welch_averaged_ps()
     k_lengths = k_lengths[1:]  # remove 0-mode for simplicity
     spectrum_welch = power_spectrum[1:]
     if ax is None:
-        plt.plot(k_lengths, spectrum_welch, label=lb, color="black")
-    else:
-        ax.plot(k_lengths, spectrum_welch, label=lb, color="black")
+        ax = plt.gca()
+    ax.plot(k_lengths, spectrum_welch, label=lb, color="black", **kwargs)
 
 
 def mean_red_chi2(data, d_th_samples, N_inv_op):
@@ -1068,7 +1067,8 @@ class InferenceSchemeRe:
 
 
 
-    def plot_posterior_power_spectrum(self, mode:Literal["median", "mean"], plot_welch_average=True, **kwargs):
+    def plot_posterior_power_spectrum(self, mode:Literal["median", "mean"], plot_welch_average=True,
+                                      custom_ax=None, **kwargs):
         """
 
         Note: If we plot only np.std(power spectrum samples) this may be larger than the mean and thus the errorbars
@@ -1095,33 +1095,39 @@ class InferenceSchemeRe:
         percentile_84 = jnp.percentile(ps_samples, 84, axis=0)
         ps_median = jnp.percentile(ps_samples, 50, axis=0)  # percentile_50
 
-        _ = plt.figure(figsize=(8,4))
-
-        if plot_welch_average:
-            plot_welch_averaged_ps()
+        if not custom_ax:
+            _ = plt.figure(figsize=(8,4))
+            ax = plt.gca()
+        else:
+            ax = custom_ax
 
         if mode == "mean":
-            plt.plot(self.k_signal[1:], ps_mean[1:], label=r"Posterior mean of power spectrum", color=blue)
+            ax.plot(self.k_signal[1:], ps_mean[1:], label=r"Posterior mean of power spectrum", color=blue, lw=2)
         elif mode == "median":
-            plt.plot(self.k_signal[1:], ps_mean[1:], label=r"Posterior mean of power spectrum", color=blue, ls="--")
-            plt.plot(self.k_signal[1:], ps_median[1:],
+            ax.plot(self.k_signal[1:], ps_mean[1:], label=r"Posterior mean of power spectrum", color=blue, ls="--")
+            ax.plot(self.k_signal[1:], ps_median[1:],
                      label=r"Reconstructed median power spectrum (with $1\sigma$ contour)", color=blue)
-            plt.fill_between(self.k_signal[1:], percentile_16[1:], percentile_84[1:], color=light_blue)
+            ax.fill_between(self.k_signal[1:], percentile_16[1:], percentile_84[1:], color=light_blue)
         else:
             raise ValueError("Mode must be either 'mean' or 'median'.")
+
+        if plot_welch_average:
+            plot_welch_averaged_ps(ax=ax)
 
         print("Zeromode P_s(k=0) excluded in plot")  # because ~0 and then changes the y limits such that the majority
         # of the power spectrum lies in just the upper half of the coordinate system
 
 
         # plt.ylim(-3e-9, 1.4e-7)
-        plt.loglog()
-        thesis_plot(xl="Frequency $f$", yl="Power", mode="longer",**kwargs)
+        ax.loglog()
+        if custom_ax is None:
+            thesis_plot(xl="Frequency $f$", yl="Power", mode="longer", custom_ax=ax, **kwargs)
 
 
     def plot_posterior_harmonic_xi_s(self, multiply_with_posterior_amp_spec=False,
                                      multiply_with_posterior_amp_spec_v2=False,
-                                     show=True):
+                                     only_return=False, custom_ax=None, custom_xi=None,
+                                     **kwargs):
         """
         multiply_with_posterior_amp_spec_v2:
 
@@ -1132,15 +1138,18 @@ class InferenceSchemeRe:
 
         :param multiply_with_posterior_amp_spec:
         :param multiply_with_posterior_amp_spec_v2:
-        :param show:
         :return:
         """
-        posterior_latent_sl = self.posterior_xi_samples
-        posterior_latent_mean_std = jft.mean_and_std(posterior_latent_sl)
-        posterior_latent_mean, _ = posterior_latent_mean_std
+        if custom_xi is None:
+            posterior_latent_sl = self.posterior_xi_samples
+            posterior_latent_mean_std = jft.mean_and_std(posterior_latent_sl)
+            posterior_latent_mean, _ = posterior_latent_mean_std
 
-        posterior_xi_s_mean = posterior_latent_mean[f"s_xi"]
-        if not show:
+            posterior_xi_s_mean = posterior_latent_mean[f"s_xi"]
+        else:
+            posterior_xi_s_mean = custom_xi
+
+        if only_return:
             return posterior_xi_s_mean
 
         expander = self.s_dom_harmonic.power_distributor
@@ -1190,9 +1199,14 @@ class InferenceSchemeRe:
             thesis_plot(xl="Frequency $f$", yl=r"$\mathrm{power}$")
 
         else:
-            _ = plt.figure(figsize=(8, 4))
-            plt.plot(self.k_signal_full, posterior_xi_s_mean, "r-", label=r"Posterior mean")
-            thesis_plot(xl="Frequency $f$", yl=r"$\xi_s$", mode="longer")
+            if custom_ax is None:
+                _ = plt.figure(figsize=(8, 4))
+                ax = plt.gca()
+            else:
+                ax = custom_ax
+            ax.plot(self.k_signal_full, posterior_xi_s_mean, color=blue, **kwargs)
+            if not custom_ax:
+                thesis_plot(xl="Frequency $f$", yl=r"$\xi_s$", mode="longer")
 
 
     def plot_noise_sample_with_data(self, num, rolling=False, show=True):

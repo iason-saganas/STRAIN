@@ -100,7 +100,7 @@ def wrap_latex_label(label, width=20):
 
 
 def thesis_plot(
-                mode:Literal["basic", "longer", "square"]="basic",
+                mode:Literal["basic", "longer", "llonger", "square"]="basic",
                 xl=r"Time $t$ $\mathrm{[s]}$",
                 yl=r"$d(t)$ $\:\mathrm{[10^{-19}]}$",
                 title=None,
@@ -115,6 +115,7 @@ def thesis_plot(
 
     mode_dict = {"basic": (8., 2.),
                  "longer": (8., 4.),
+                 "llonger": (8., 6.),
                  "square": (4.,4.)}
 
     if mode not in mode_dict:

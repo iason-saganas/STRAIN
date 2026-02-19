@@ -1,7 +1,6 @@
 import matplotlib.pyplot as plt
 
 # Good run: Set plot_prior_samples to False.
-
 from _01_get_smooth_baseline_ps_debug import *
 from function_02_get_location_of_spikes import _02_get_location_of_spikes_from_xi
 import numpy as np
@@ -167,7 +166,7 @@ for r in range(global_peak_refinement_steps):
     key = pipe_2.get_current_key()
     pipe = pipe_2  # bump from pipe_1 to pipe_2 in the iterative refinement
     if switch_to_inference_xi_in_iter[r+1] == 1:
-        h_xi = pipe_2.plot_posterior_harmonic_xi_s(show=False)  # now we can check for peaks in this xi in the next
+        h_xi = pipe_2.plot_posterior_harmonic_xi_s(only_return=True)  # now we can check for peaks in this xi in the next
         # refinement iteration
     else:
         h_xi = None # recompute penrose
@@ -184,7 +183,7 @@ for r in range(global_peak_refinement_steps):
     latent_peak_posterior_metadata = posterior_latent_peak_info
     old_pipes.append(pipe)
 
-    thesis_plot_3 = True
+    thesis_plot_3 = False
     plot_results = False
     if not pipe_2_called_as_import and plot_results:
 
@@ -240,4 +239,124 @@ for r in range(global_peak_refinement_steps):
 
 
     if thesis_plot_3 and r == 5:
-        pass
+        fig = plt.figure(constrained_layout=False, figsize=(10, 8))
+        gridspec = fig.add_gridspec(nrows=3, ncols=2)
+
+        # Get Wigner function and store
+        penrose_xi = pipe_2.calculate_and_plot_penrose_xi(itr=100_000, plot=False, reload_from_cache=True,
+                                                          fn=f"penrose_xi_in_iter_{r}.txt")
+
+        inference_xi = pipe_2.plot_posterior_harmonic_xi_s(only_return=True)
+
+        # S_penrose, _, _ = Stress_jft(penrose_xi, time=time)
+        # S_inference, _, _ = Stress_jft(inference_xi, time=time)
+
+        # import os
+        # os.makedirs("dlt_later/", exist_ok=True)
+        # pickle_me_this("dlt_later/S_penrose", S_penrose)
+        # pickle_me_this("dlt_later/S_inference", S_inference)
+
+        S_penrose = unpickle_me_this("dlt_later/S_penrose.pickle")
+        S_inference = unpickle_me_this("dlt_later/S_inference.pickle")
+
+        # Create subplot grids
+
+        ax_upper = fig.add_subplot(gridspec[0, :])  # first row, all columns
+
+        ax_11 = fig.add_subplot(gridspec[1, 0])
+        ax_12 = fig.add_subplot(gridspec[1, 1])
+
+        ax_21 = fig.add_subplot(gridspec[2, 0])
+        ax_22 = fig.add_subplot(gridspec[2, 1])
+
+
+        #--- Populate: Upper row
+        pipe_2.plot_posterior_power_spectrum(mode="mean", custom_ax=ax_upper, plot_welch_average=False,
+                                             label="Posterior mean")
+        plot_welch_averaged_ps(ax=ax_upper, alpha=0.5)
+
+
+        # --- Populate: Upper left (under upper row): ax_11
+        pipe_2.plot_posterior_harmonic_xi_s(custom_ax=ax_11, custom_xi=inference_xi/np.max(inference_xi),
+                                            label="")
+
+        # --- Populate: Lower left: ax_21
+        pipe_2.plot_posterior_harmonic_xi_s(custom_ax=ax_21, custom_xi=penrose_xi.real/np.max(penrose_xi.real),
+                                            label="")
+
+
+        # Populate imshow plots
+        visualize_stress(stress_matrix=S_inference/np.max(S_inference), rows=pipe_2.k_signal_full,
+                         cols=pipe_2.t_ss-16.4, smooth=True, custom_ax=ax_12, delay_plot=True,
+                         colorbar_label="Stress (normed)")
+
+        visualize_stress(stress_matrix=S_penrose/np.max(S_penrose), rows=pipe_2.k_signal_full,
+                         cols=pipe_2.t_ss-16.4, smooth=True, custom_ax=ax_22, delay_plot=True,
+                         colorbar_label="Stress (normed)")
+
+
+        # Misc edits
+        ax_upper.legend(loc="lower left")
+        # ax_11.legend(loc="lower left")
+        # ax_21.legend(loc="lower left")
+
+        ax_11.sharex(ax_21)
+        ax_11.tick_params(labelbottom=False)
+
+        ax_12.sharex(ax_22)
+        ax_12.sharey(ax_22)
+        ax_12.tick_params(labelbottom=False)
+
+        ax_11.set_title(r"Posterior mean $\tilde{\xi}_d$")
+        ax_21.set_title(r"Moore-Penrose $\tilde{\xi}_d^{\ast}$")
+
+        ax_12.set_xlim(-0.1, 0.1)
+        ax_12.set_ylim(-400, 400)
+
+        # Axes labels
+        ax_upper.set_ylabel("Power")
+        ax_11.set_ylabel("normed Ampl.")
+        ax_21.set_ylabel("normed Ampl.")
+
+        ax_21.set_xlabel(r"$f$ $\mathrm{[Hz]}$")
+
+        ax_22.set_xlabel(r"$t$ $\mathrm{[s]}$")
+        ax_22.set_ylabel(r"$f$ $\mathrm{[Hz]}$", labelpad=-5)
+        ax_12.set_ylabel(r"$f$ $\mathrm{[Hz]}$", labelpad=-5)
+
+        # Make more space for colorbar
+        fig.subplots_adjust(right=0.85, hspace=0.4, wspace=0.5)
+
+        # Finally add labels
+        # labels = ["(a)", "(b)", "(c)", "(d)", "(e)"]
+        # axs = [ax_upper, ax_11, ax_12, ax_21, ax_22]
+        #
+        # for ax, lab in zip(axs, labels):
+        #     ax.text(
+        #         0.05, 0.95, lab,
+        #         transform=ax.transAxes,
+        #         va="top",
+        #         ha="left",
+        #         fontsize=label_fontsize_pts,
+        #     )
+
+        y1 = 0.495
+        plt.annotate(
+            "",
+            xytext=(0.43, y1),
+            xy=(0.47, y1),
+            xycoords='figure fraction',
+            arrowprops=dict(arrowstyle="->", color="k", lw=3)
+        )
+
+        y2 = 0.212
+        plt.annotate(
+            "",
+            xytext=(0.43, y2),
+            xy=(0.47, y2),
+            xycoords='figure fraction',
+            arrowprops=dict(arrowstyle="->", color="k", lw=3)
+        )
+
+        save_figure(save_fig=True, tight_ly=False, show=True)
+

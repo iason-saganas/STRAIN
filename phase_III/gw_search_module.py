@@ -1,4 +1,6 @@
 # Updated version of `phase_II/nifty_re_playground/_00_gw_search.py`
+import os
+from typing import Literal, Any, Optional
 from dataclasses import dataclass
 
 from phase_II.nifty_re_playground.strain_tools import *
@@ -38,13 +40,14 @@ The data is divided into segments over which the Welch average is computed. Each
 windows needed for the Welch-average; the detection statistic is computed for each window and the results of all 
 windows are stitched together. 
 """
-from typing import Literal, Any, Optional
+
 
 
 class GwSearch:
     def __init__(self, event:str, detector:Literal["H1", "L1"], data_duration:Literal["32sec", "4096sec"],
                  desired_maximal_data_duration:float, random_center:float, stationarity_time_scale=32, T_mini_welch=2,
-                 signal_duration_overlap=.3, debug_plots=False, debug_welch_average_plots=False):
+                 signal_duration_overlap=.3, debug_plots=False, debug_welch_average_plots=False,
+                 out_name=""):
         """
 
         Tests for the presence of GWs in a data strip by computing and manipulating the Wigner function over multiple
@@ -63,12 +66,13 @@ class GwSearch:
         :param T_mini_welch:                    The length of the windows used to subdivide the data for the
                                                 computation of the Welch-average.
         :param signal_duration_overlap:         In seconds, how much to overlap each segment with its left neighbor.
+                                                Half of this value is cropped to the left and to the right of the
+                                                detection statistic.
+        :param out_name:                        Where to store intermediate results
         :param debug_plots:
         :param debug_welch_average_plots:
         """
-        pass
-
-
+        os.makedirs(out_name, exist_ok=True)
 
         # Let's start from the known event gps time and off-center the data a bit to simulate a random data pick
         random_center = 1126259462.4-5  # Beginning of GW150914 - 11 seconds
@@ -179,6 +183,8 @@ class GwSearch:
             plt.show()
 
         # Base fields
+        self.out_name = out_name
+        self.detector = detector
         self.global_time = global_time
         self.global_strain = global_strain
         self.T_mini_welch = T_mini_welch
@@ -239,47 +245,87 @@ class GwSearch:
 
 
     def sliding_wigner_function_search(self):
-        print("Calculating stress and detection statistics for each window of each segment with overlap.")
-        windows_of_all_overlapping_segments = self.get_overlapping_window_segments()
-        untrimmed_detection_stats = []
-        for window_idx, (segment_idx, t, s) in enumerate(windows_of_all_overlapping_segments):
-            # windows_of_all_segments elements : (segment_idx, time_window, strain_window) over all windows and segments
-            welch_ps_idx = self._get_welch_index(t, s)
-            welch_to_use = self.welch_averages[welch_ps_idx]
 
-            s = s - np.mean(s)
+        files = os.listdir(self.out_name)
 
-            amp = np.sqrt(welch_to_use)
-            whitened_data = whiten(y=s, amp=amp)
-            stress, _, _ = Stress_jft(xi=whitened_data, time=t, supress_print=True)
-            print("Stress calculation done for window ", window_idx+1 ,f"/ {len(windows_of_all_overlapping_segments)}")
-            dc_line, _ = detection_statistic(stress_matrix=stress, plot=False)
+        file_exists = False
+        fn = None
+        for file in files:
+            if f"{self.detector}_untrimmed_detection_stats_T_{self.T_mini_welch}sec" in file:
+                fn = file
+                file_exists = True
+                break
 
-            untrimmed_detection_stats.append((t,dc_line))
+        if file_exists:
+            untrimmed_detection_stats = unpickle_me_this(self.out_name + "/" + fn)
+        else:
+            print("Calculating stress and detection statistics for each window of each segment with overlap.")
+            windows_of_all_overlapping_segments = self.get_overlapping_window_segments()
+            untrimmed_detection_stats = []
+            for window_idx, (segment_idx, t, s) in enumerate(windows_of_all_overlapping_segments):
+                # windows_of_all_segments elements : (segment_idx, time_window, strain_window) over all windows and segments
+                welch_ps_idx = self._get_welch_index(t, s)
+                welch_to_use = self.welch_averages[welch_ps_idx]
 
+                s = s - np.mean(s)
+
+                amp = np.sqrt(welch_to_use)
+                whitened_data = whiten(y=s, amp=amp)
+                stress, _, _ = Stress_jft(xi=whitened_data, time=t, supress_print=True)
+                print("Stress calculation done for window ", window_idx+1 ,f"/ {len(windows_of_all_overlapping_segments)}")
+                dc_line, _ = detection_statistic(stress_matrix=stress, plot=False)
+
+                untrimmed_detection_stats.append((t,dc_line))
+            name = self.out_name + f"/{self.detector}_untrimmed_detection_stats_T_{self.T_mini_welch}sec"
+            pickle_me_this(name, untrimmed_detection_stats)
+
+        print("Saving ", len(untrimmed_detection_stats), " overlapping windows.")
         self.untrimmed_detection_stats = untrimmed_detection_stats
-
-
-    def plot_detection_statistic(self, **kwargs):
-        if self.untrimmed_detection_stats is None:
-            raise ValueError("No untrimmed detection statistics available; run `sliding_wigner_function_search` first")
 
         # Remove edges.
         trimmed_detection_stats = []
-        n_samples_edges = int(self.fs * self.signal_duration_overlap)
+        n_samples_edges = int(self.fs * self.signal_duration_overlap) // 2  # assume even. If not error by one or
+        # two samples
         for times, dc_lines in self.untrimmed_detection_stats:
-            t = times[n_samples_edges:-n_samples_edges]
-            dc_line = dc_lines[n_samples_edges:-n_samples_edges]
+            if n_samples_edges == 0:
+                # Overlap was 0 => Don't cut
+                t = times
+                dc_line = dc_lines
+            else:
+                # Non-zero overlap => Cut away half of the assumed signal duration to the left and the right
+                # This way, one segement ends signal_duration_overlap/2 earlier, whereas the next segment starts
+                # signal_duration_overlap/2 later, so they form a boundary
+                t = times[n_samples_edges:-n_samples_edges]
+                dc_line = dc_lines[n_samples_edges:-n_samples_edges]
             trimmed_detection_stats.append((t, dc_line))
 
         self.trimmed_detection_stats = trimmed_detection_stats
 
+
+    def plot_detection_statistic(self, ax=None, mode="longer", **kwargs):
+        if self.untrimmed_detection_stats is None:
+            raise ValueError("No untrimmed detection statistics available; run `sliding_wigner_function_search` first")
+
         detection_times = np.concatenate([el[0] for el in self.trimmed_detection_stats])
         detection_values = np.concatenate([el[1] for el in self.trimmed_detection_stats])
 
-        _ = plt.figure(figsize=(8, 4))
-        plt.plot(detection_times, detection_values)
-        thesis_plot(mode="longer", yl="Amplitude", **kwargs)
+        if ax is None:
+            _ = plt.figure(figsize=(8, 4))
+            ax = plt.gca()
+
+        ax.plot(detection_times, detection_values/1e3, color="black")
+
+        ax.text(
+            0.05, 0.9,  # x, y in axes fraction (0–1)
+            self.detector,  # text
+            transform=ax.transAxes,
+            verticalalignment='top',
+            horizontalalignment='left',
+            fontsize=20,
+        )
+
+        thesis_plot(yl=r"$\mathrm{DS}(t)\cdot 10^{-3}$", mode=mode, custom_ax=ax,**kwargs)
+        return ax
 
 
     def plot_segments(self):
