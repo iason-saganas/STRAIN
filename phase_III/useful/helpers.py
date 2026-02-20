@@ -84,6 +84,7 @@ def plot_posterior(key, times, operator_list, label_list, latent_samples, plot_p
 
         operator_samples = jnp.array([operator(xi) for xi in latent_samples])
         mean_op = jnp.mean(operator_samples, axis=0)
+        op_std = jnp.std(operator_samples, axis=0)
 
         ax = fig.add_subplot(N, 1, idx + 1)
 
@@ -99,6 +100,13 @@ def plot_posterior(key, times, operator_list, label_list, latent_samples, plot_p
             else:
                 lb = "posterior " + label_list[idx]
             ax.plot(times, mean_op[:M], label=lb, color=blue, lw=3)
+
+            # shaded 1-sigma region
+            plt.fill_between(times,
+                             mean_op - op_std,
+                             mean_op + op_std,
+                             color=light_blue,
+                             alpha=0.7)  # transparency
 
         if plot_prior_samples:
             for _ in range(3):

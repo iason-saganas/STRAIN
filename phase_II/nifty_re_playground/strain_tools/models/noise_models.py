@@ -452,6 +452,7 @@ class NoiseCovarianceFromPs:
         self.M_k_lengths = len(self.h_grid.relative_log_mode_lengths)
         self.M = len(self.one_sided_noise_ps)
         self.dk = self.k[1]-self.k[0]
+        self.dt = data_grid.distances[0]
 
         self.expand =  self.h_grid.power_distributor # [0 1 2 ... 3 2 1], therefore,
         # if one_sided_noise_ps is ordered as [0, +1, +2, ..., +N/2], one_sided_noise_ps[power_distributor]
@@ -476,9 +477,17 @@ class NoiseCovarianceFromPs:
         )
 
     def __call__(self, p):
-        fourier_input = self.uH(p)  # An i.i.d. variable in standard DFT order [0, +1, +2, ..., +N/2, -N/2+1, ..., -1.]
-        kernel = self.apply_callable(self.full_noise_ps * self.h_vol)
-        return self.iuH(kernel * fourier_input)
+        # fourier_input = self.uH(p)  # An i.i.d. variable in standard DFT order [0, +1, +2, ..., +N/2, -N/2+1, ..., -1.]
+        # kernel = self.apply_callable(self.full_noise_ps * self.h_vol)
+        # return self.iuH(kernel * fourier_input)
+
+        # The call above seems to ever so slightly misrepresent the variance (by ~0.1)
+
+        xi_tilde = jnp.fft.fft(p)  # full FFT
+        df = 1.0 / (self.N * self.dt)  # frequency spacing
+        # full_noise_ps already mirrors negative frequencies, multiply by N to correct ifft scaling
+        kernel = self.apply_callable(self.full_noise_ps * df * self.N)
+        return jnp.fft.ifft(kernel * xi_tilde).real
 
 
 def _callable_repr(f):

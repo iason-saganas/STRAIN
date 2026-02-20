@@ -1228,12 +1228,12 @@ class InferenceSchemeRe:
         _ = plt.figure(figsize=(8, 2))
 
         noise_samples = []
-        for _ in range(500):
+        for _ in range(1000):
             xi = np.random.standard_normal(self.n_ds)
             sl = N_sqrt(xi)
             noise_samples.append(sl)
 
-        print("\nMean cross variance of noise samples: Var(sl) = ", np.mean(np.var(noise_samples, axis=0)), " (over 500 samples)")
+        print("\nMean cross variance of noise samples: Var(sl) = ", np.mean(np.var(noise_samples, axis=0)), " (over 1000 samples)")
         if show:
             for sl in noise_samples[:num]:
                 plt.plot(self.t_ds, sl)

@@ -127,23 +127,30 @@ class StochasticOscillatorPrior:
             )
 
         def mask_operator(op):
-            op_tmp = lambda p: op(p) * smooth_mask(self.cfm_times, t0=-.2, t1=.2, width=.001)
-            op_tmp.domain = op.domain
+            t0 = jft.NormalPrior(mean=-0.2, std=0.2, name="t0")
+            t1 = jft.NormalPrior(mean=+0.2, std=0.2, name="t1")
+            mask_width = jft.LogNormalPrior(mean=1e-2, std=1e-3, name="mask_width")
+            # op_tmp = lambda p: op(p) * smooth_mask(self.cfm_times, t0=-.2, t1=.2, width=.001)
+            op_tmp = lambda p: op(p) * smooth_mask(self.cfm_times, t0=t0(p), t1=t1(p), width=mask_width(p))
+            op_tmp.domain = op.domain | t0.domain | t1.domain | mask_width.domain
             return op_tmp
 
         def add_peak(op):
             t = self.cfm_times
-            t0 = 0
+            t0 = jft.NormalPrior(mean=0, std=0.5, name="t0")
+            # t0 = 0
             sig = .1
             A = 1
-            peak_model = A*jnp.exp(-(t - t0)**2/(2*sig**2))
+            peak_model = lambda p: A*jnp.exp(-(t - t0(p))**2/(2*sig**2))
             # peak_model = A/jnp.cosh((t-t0)/sig)
 
-            # plt.plot(self.cfm_times, peak_model)
+            # peak_model_concrete_values = A*jnp.exp(-(t - (-0.10998))**2/(2*sig**2))
+            # plt.plot(self.cfm_times, peak_model_concrete_values)
             # plt.show()
             # stop
-            op_tmp = lambda p: peak_model * op(p)
-            op_tmp.domain = op.domain
+
+            op_tmp = lambda p: peak_model(p) * op(p)
+            op_tmp.domain = op.domain | t0.domain
             return op_tmp
 
 
@@ -162,9 +169,21 @@ class StochasticOscillatorPrior:
 
         def multiply_op_2_to_op_1(op1, op2):
             # op_1_tmp = lambda p: op1(p)*op2(p)/jnp.max(op2(p))  # normed
-            op_1_tmp = lambda p: op1(p)*op2(p) #  non-normed
+            op_1_tmp = lambda p: op1(p)*op2(p)**2 #  non-normed and squared
+            # op_1_tmp = lambda p: op1(p)*op2(p) #  non-normed
             op_1_tmp.domain = op1.domain | op2.domain
             return op_1_tmp
+
+        import jax
+        def give_op_1_smooth_amplitude_boost_with_op_2(op_1, op_2, boost=1e1, bound=1500):
+            def op_1_tmp(p):
+                mask = 1 + (boost - 1) * 0.5 * (1 + jnp.tanh(op_2(p) - bound))
+                jax.debug.print("max boost through mask = {x}", x=jnp.max(mask))
+                return op_1(p) * mask
+
+            op_1_tmp.domain = op_1.domain | op_2.domain
+            return op_1_tmp
+
 
         # omega = lambda p: jnp.sqrt(jnp.exp(log_omega_sq(p)))
         omega = lambda p: jnp.clip(jnp.sqrt(jnp.exp(log_omega_sq(p))), -jnp.inf, 1e4)
@@ -173,9 +192,17 @@ class StochasticOscillatorPrior:
         # xi_force, = (mask_operator(op) for op in [xi_force])
         # xi_force = mask_inital(xi_force, int(len(self.cfm_times)*0.4))
 
-        # omega = add_peak(omega)
+        # omega, _, xi_force = (mask_operator(op) for op in (omega, gamma, xi_force))
 
+        # omega = add_peak(omega)
         xi_force = multiply_op_2_to_op_1(xi_force, omega)
+        xi_force = add_peak(xi_force)
+
+        # Q = jft.LogNormalPrior(1e2, 1e2, name="quality_factor")
+        # gamma = lambda p: omega(p)**(-1) / jnp.max(omega(p)**(-1)) * Q(p)
+        # gamma.domain = log_omega_sq.domain | Q.domain
+
+        # xi_force = give_op_1_smooth_amplitude_boost_with_op_2(xi_force, omega, boost=1e6)
 
         return omega, gamma, xi_force
 

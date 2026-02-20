@@ -27,35 +27,38 @@ print("mean of the data:", np.mean(strain_strip))
 
 pipe_3 = InferenceSchemeRe(t=time_strip, d=strain_strip, e_fac=1, r_fac=1, key=key, plotting_callback=analyze_kl_callback)
 
-oscillator_prior_dct = {
-    "frequency": {"offset_mean": 1000, "offset_std": (250, 1e-16), "fluctuations": (1, 1), "loglogavgslope": (-2, 1e-16)},  # LOG FLUCTUATIONS!!
-    "damping": {"offset_mean": 500, "offset_std": (250, 1e-16), "fluctuations": (1e-16, 1e-16), "loglogavgslope": (-2, 1e-16)},
-    "force": {"offset_mean": 0, "offset_std": (1e-16, 1e-16), "fluctuations": (1, .1), "loglogavgslope": (0, 1e-16)},
-    "global_amplitude": (1e2, 1e1),
-    "init_conditions": (0., 0.)
-}
-
 # oscillator_prior_dct = {
-#     "frequency": {"offset_mean": 100, "offset_std": (50, 1e-16), "fluctuations": (1, 1), "loglogavgslope": (-4, 1e-16)},  # LOG FLUCTUATIONS!!
-#     "damping": {"offset_mean": 50, "offset_std": (25, 1e-16), "fluctuations": (1e-16, 1e-16), "loglogavgslope": (-4, 1e-16)},
-#     "force": {"offset_mean": 0, "offset_std": (1e-16, 1e-16), "fluctuations": (1, 1), "loglogavgslope": (0, 1e-16)},
-#     "global_amplitude": (1e4, 1e3),
+#     "frequency": {"offset_mean": 1000, "offset_std": (250, 1e-16), "fluctuations": (1, 1), "loglogavgslope": (-2, 1e-16)},  # LOG FLUCTUATIONS!!
+#     "damping": {"offset_mean": 500, "offset_std": (250, 1e-16), "fluctuations": (1e-16, 1e-16), "loglogavgslope": (-2, 1e-16)},
+#     "force": {"offset_mean": 0, "offset_std": (1e-16, 1e-16), "fluctuations": (1, .1), "loglogavgslope": (0, 1e-16)}, # "flex":(2,2) flex helps sometimes
+#     "global_amplitude": (1e2, 1e1),
 #     "init_conditions": (0., 0.)
 # }
+# with use_driving_force = True and xi_force = multiply_op_2_to_op_1(xi_force, omega) NOT normed
+
+oscillator_prior_dct = {
+    "frequency": {"offset_mean": 1000, "offset_std": (500, 1e-16), "fluctuations": (1, 1), "loglogavgslope": (-2, 1e-16)},  # LOG FLUCTUATIONS!!
+    "damping": {"offset_mean": 500, "offset_std": (250, 1e-16), "fluctuations": (1e-16, 1e-16), "loglogavgslope": (-2, 1e-16)},
+    "force": {"offset_mean": 0, "offset_std": (1e-16, 1e-16), "fluctuations": (1, 1), "loglogavgslope": (0, 1e-16), }, #"flex":(2,2)},
+    "global_amplitude": (1, 1),
+    "init_conditions": (0, 0),
+}
 
 use_driving_force = True
 
 signal_domain = pipe_3.t_ss
 target_domain = pipe_3.t_ds
 
-signal_prior = StochasticOscillatorPrior(oscillator_prior_dct, signal_time_domain=signal_domain, forceless=not use_driving_force)
+signal_prior = StochasticOscillatorPrior(oscillator_prior_dct, signal_time_domain=signal_domain,
+                                         forceless=not use_driving_force)
 
 oscillator = HarmonicOscillator(signal_domain_times=signal_domain, signal_prior=signal_prior,
-                                tukey_window_alpha=alpha_taper_on_data * 0,  # no taper on the oscillator model itself
+                                tukey_window_alpha=alpha_taper_on_data,  # no taper on the oscillator model itself
                                 normalize=False,
                                 add_global_amp=True,
-                                cfm_envelope=None
+                                cfm_envelope=None,
                                 # cfm_envelope={"fluct": (1,1e-16), "llslope": (-4,1e-16)}
+                                sample_initial_time=False
                                 )
 # oscillator.plot_samples(20, key)
 
@@ -99,9 +102,6 @@ welch_k, welch_pow_spec = welch(
         return_onesided=True,
     )
 welch_pow_spec /= 2
-print("freq var: ", np.trapezoid(y=welch_pow_spec, x=welch_k)*2)
-print("DC frequency: " , welch_pow_spec[0])
-
 
 correction_factor = 1
 N_inv = NoiseCovarianceFromPs(one_sided_noise_ps=welch_pow_spec, callable_to_apply=lambda x: x**(-1),
@@ -119,8 +119,24 @@ N_sqrt = NoiseCovarianceFromPs(one_sided_noise_ps=welch_pow_spec, callable_to_ap
 pipe_3.add_noise_op(inverse_noise_op=N_inv, sqrt_inverse_noise_op=N_sqrt_inv, sqrt_noise_op=N_sqrt)
 # pipe_3.plot_noise_sample_with_data(1)
 
-latent_samples, other_stuff = pipe_3.run_inference(kl_iterations=20, use_strict_minimizers=True, out_name="signal_reconstruction_sde_DEBUG_DEBUG",
+
+noise_variance_check = True
+if noise_variance_check:
+    samples = [N_sqrt(np.random.standard_normal(pipe_3.n_ds)) for _ in range(10000)]
+    print("(DC frequency: ", welch_pow_spec[0], ")")
+    print("freq var: ", np.trapezoid(y=welch_pow_spec, x=welch_k) * 2)
+    print("Mean variance of samples: ", np.mean(np.var(samples, axis=0)))
+
+
+pipe_3.set_init_pos(init_pos=dict(t0=jnp.float64(0.)), plot=True)
+
+latent_samples, other_stuff = pipe_3.run_inference(kl_iterations=13, use_strict_minimizers=True, out_name="signal_reconstruction_sde_DEBUG_DEBUG",
                                       resume=True, choose_low_kl_starting_pos=False, geoVi=True)
+
+t0 = jft.NormalPrior(mean=0, std=0.5, name="t0")
+t0_mean = jft.mean(jnp.array([t0(sl) for sl in latent_samples]))
+print("Center placed at: ", t0_mean)
+
 key = pipe_3.get_current_key()
 
 NR = get_waveform_template(event_name="GW150914", detector="H1", gps_center=strain_object.gps_center,
