@@ -120,10 +120,6 @@ class StochasticOscillatorPrior:
             log_omega_sq, gamma = results
             xi_force = lambda p: jnp.zeros(self.N)
 
-        # omega = lambda p: jnp.sqrt(jnp.exp(log_omega_sq(p)))
-        omega = lambda p: jnp.clip(jnp.sqrt(jnp.exp(log_omega_sq(p))), -jnp.inf, 1e4)
-        omega.domain = log_omega_sq.domain
-
         def smooth_mask(times, t0, t1, width):
             return 0.5 * (
                     jnp.tanh((times - t0) / width)
@@ -157,9 +153,30 @@ class StochasticOscillatorPrior:
             op_tmp.domain = op.domain
             return op_tmp
 
+
+        def op1_as_inverse_of_op2(op1, op2):
+            op_1_tmp = lambda p: 1e2/(op2(p)+1)-1
+            op_1_tmp.domain = op2.domain
+            return op_1_tmp
+
+
+        def multiply_op_2_to_op_1(op1, op2):
+            # op_1_tmp = lambda p: op1(p)*op2(p)/jnp.max(op2(p))  # normed
+            op_1_tmp = lambda p: op1(p)*op2(p) #  non-normed
+            op_1_tmp.domain = op1.domain | op2.domain
+            return op_1_tmp
+
+        # omega = lambda p: jnp.sqrt(jnp.exp(log_omega_sq(p)))
+        omega = lambda p: jnp.clip(jnp.sqrt(jnp.exp(log_omega_sq(p))), -jnp.inf, 1e4)
+        omega.domain = log_omega_sq.domain
+
         # xi_force, = (mask_operator(op) for op in [xi_force])
         # xi_force = mask_inital(xi_force, int(len(self.cfm_times)*0.4))
-        omega = add_peak(omega)
+
+        # omega = add_peak(omega)
+
+        xi_force = multiply_op_2_to_op_1(xi_force, omega)
+
         return omega, gamma, xi_force
 
 

@@ -10,6 +10,10 @@ key = jax.random.key(34)
 # In this file, I take the Welch average for the noise statistics, model the signal as a CFM and initiate
 # it at the waveform found inverting the Wigner function
 
+plot_samples_and_results=True
+if not __name__ == "__main__":
+    plot_samples_and_results = False
+
 # -- Set a GPS time:
 t0 = 1126259462.4    # -- GW150914
 #-- Choose detector as H1, L1, or V1
@@ -87,15 +91,13 @@ s_prime.get_model_components = generative_wavelet.get_model_components
 
 pipe_3.add_custom_signal_model(custom_signal_model=s_prime)
 
-for idx in range(5):
-    print("idx+1: ", idx+1)
-    sample_waveform, key = draw_and_plot_field_realizations(times=cfm_times, diff_eq_solver_model=generative_wavelet,
-                                                            omega_op=omega_cfm, gamma_op=gamma_cfm, xi_op=xi_cfm,
-                                                            key=key)
+if plot_samples_and_results:
+    for idx in range(5):
+        print("idx+1: ", idx+1)
+        sample_waveform, key = draw_and_plot_field_realizations(times=cfm_times, diff_eq_solver_model=generative_wavelet,
+                                                                omega_op=omega_cfm, gamma_op=gamma_cfm, xi_op=xi_cfm,
+                                                                key=key)
 
-# plt.plot(time, strain, label="Numerical relativity template synth data")
-# plt.plot(cfm_times, sample_waveform, label="Fw model evaluation")
-# usual_plot()
 
 raise_warning("Using welch averaged power spectrum for inference!!! ")
 
@@ -112,51 +114,18 @@ N_sqrt = NoiseCovarianceFromPs(one_sided_noise_ps=welch_pow_spec, callable_to_ap
 
 pipe_3.add_noise_op(inverse_noise_op=N_inv, sqrt_inverse_noise_op=N_sqrt_inv, sqrt_noise_op=N_sqrt)
 
-# 4. Get some noise and signal samples
-# wigner_xi_waveform = interpolate_waveform_from_inverted_wigner(pipe_3.t_ss)
-# wigner_xi_waveform /= max(wigner_xi_waveform)  # The inverted wigner misses some normalization factors.
-# these can be recovered and should then give the correct amplitude. I set it manually here
-
-# norm = pipe_3.k_signal_full ** (-2)
-# norm[0]=1
-# harmonic_wigner_xi_waveform = fw_hartley(wigner_xi_waveform, norm=None) / norm / 1e6
-
-# pipe_3.plot_noise_sample_with_data(num=2, rolling=False)
-
-# pipe_3.set_init_pos(init_pos={"s_xi": jnp.array(harmonic_wigner_xi_waveform),
-#                               # "s_flexibility": -1e3,
-#                               "s_fluctuations": 1.,
-#                               "s_loglogavgslope": -1.},
-#                     plot=True, plot_welch_average=False)
 
 latent_samples, other_stuff = pipe_3.run_inference(kl_iterations=20, use_strict_minimizers=True, out_name="signal_reconstruction_sde",
                                       resume=True, choose_low_kl_starting_pos=False, geoVi=True)
 key = pipe_3.get_current_key()
 
-pipe_3.plot_posterior_signal(plot_nrt=True, print_posterior_parameters=True, over_full_signal_space=False,
-                             plot_data=False,
-                             xlim=(16.3, 16.46),
-                             save_fig=False,
-                             yl=r"$h(t)$ $\mathrm{[10^{-19}]}$")
+if plot_samples_and_results:
+    pipe_3.plot_posterior_signal(plot_default_nrt=True, print_posterior_parameters=True, over_full_signal_space=False,
+                                 plot_data=False,
+                                 xlim=(16.3, 16.46),
+                                 save_fig=False,
+                                 yl=r"$h(t)$ $\mathrm{[10^{-19}]}$")
 
-# signal_samples = [generative_wavelet(xi) for xi in latent_samples]
-# s_prime_samples = [s_prime(xi) for xi in latent_samples]
-# signal_mean, signal_std = jft.mean_and_std(signal_samples)
-# s_prime_mean, s_prime_std = jft.mean_and_std(s_prime_samples)
-#
-#
-# plt.errorbar(cfm_times, signal_mean, yerr=signal_std,label="SDE model", ecolor="lightblue")
-# nrt_strain_values = np.loadtxt("/Users/iason/PycharmProjects/STRAIN/data/data_txt/num_rel_template_strain_values.txt") * 1e19
-# nrt_time_values = np.loadtxt("/Users/iason/PycharmProjects/STRAIN/data/data_txt/num_rel_template_time_values.txt")
-# nrt_time_values = nrt_time_values - nrt_time_values[0] + 15
-# go_until = np.max(np.where(nrt_time_values<max(time)))
-#
-# plt.xlim(16.2, 16.5)
-# plt.plot(nrt_time_values[:go_until], nrt_strain_values[:go_until], label="LIGO Template",
-#          color=red)
-#
-# plt.plot(time, s_prime_mean, "--", color="red", label="Predicted data")
-# usual_plot()
 
-key = plot_posterior(key, times=cfm_times, operator_list=[omega_cfm, gamma_cfm, xi_cfm, generative_wavelet], latent_samples=latent_samples,
-                     label_list=["omega", "gamma res", "xi", "waveform"], save_fig=False)
+    key = plot_posterior(key, times=cfm_times, operator_list=[omega_cfm, gamma_cfm, xi_cfm, generative_wavelet], latent_samples=latent_samples,
+                         label_list=["omega", "gamma res", "xi", "waveform"], save_fig=False)

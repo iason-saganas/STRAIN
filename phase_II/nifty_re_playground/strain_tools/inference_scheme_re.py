@@ -455,7 +455,7 @@ class InferenceSchemeRe:
             self.sqrt_inv_N_cov = sqrt_inverse_noise_op
 
 
-    def set_init_pos(self, init_pos:jft.Vector | dict, plot=False, plot_welch_average=True):
+    def set_init_pos(self, init_pos:jft.Vector | dict, plot=False, plot_power_spectrum=False, plot_welch_average=True):
         """
 
         :param init_pos:    A jft vector or a dictionary containing latent space values to use as initial positions
@@ -488,28 +488,37 @@ class InferenceSchemeRe:
         self.init_pos = jft.Vector(base_initial_position)
 
         if plot:
-            ps = lambda xi: self.amplitude_op(xi)**2
+            ps = lambda xi: self.amplitude_op(xi) ** 2
             s_prime = self.signal_response()
 
             init_ps = ps(self.init_pos)
             init_s_prime = s_prime(self.init_pos)
 
-            fig, axs = plt.subplots(nrows=2, ncols=1)
+            nrows = 2 if plot_power_spectrum else 1
+            fig, axs = plt.subplots(nrows=nrows, ncols=1, squeeze=False)
+            axs = axs.flatten()
 
-            if plot_welch_average:
-                plot_welch_averaged_ps(axs[0])
-            axs[0].loglog(self.k_signal, init_ps, label="initial power spectrum")
-            axs[0].set_xlabel("Frequency $f$")
-            axs[0].set_ylabel("Power")
+            if plot_power_spectrum:
+                ax_ps = axs[0]
 
+                if plot_welch_average:
+                    plot_welch_averaged_ps(ax_ps)
 
-            axs[1].plot(self.t_ds, init_s_prime, label="initial position in data space")
-            axs[1].set_xlabel("Time $t$")
-            axs[1].set_ylabel("Strain")
+                ax_ps.loglog(self.k_signal, init_ps, label="initial power spectrum")
+                ax_ps.set_xlabel("Frequency $f$")
+                ax_ps.set_ylabel("Power")
+                ax_ps.legend()
 
-            axs[0].legend()
-            axs[1].legend()
-            plt.tight_layout()
+                ax_ts = axs[1]
+            else:
+                ax_ts = axs[0]
+
+            ax_ts.plot(self.t_ds, init_s_prime, label="initial position in data space")
+            ax_ts.set_xlabel("Time $t$")
+            ax_ts.set_ylabel("Strain")
+            ax_ts.legend()
+
+            fig.tight_layout()
             plt.show()
 
     def add_minimizers(self, linear_loose=(0.02, 100), linear_strict=(0.02, 150), non_linear_loose=(0.5, 20),
@@ -987,7 +996,7 @@ class InferenceSchemeRe:
 
 
     def plot_posterior_signal(self, print_posterior_parameters=False, over_full_signal_space=False,
-                              plot_default_nrt=False, maxL_template_xy=None,
+                              plot_default_nrt=False, maxL_template_xy=None, shade_1sigma=True, shade_2sigma=False,
                               plot_data=True, **kwargs):
         _, signal_mean_std_ss, _ = (
             self.get_posterior_statistics(print_posterior_parameters))
@@ -1032,19 +1041,21 @@ class InferenceSchemeRe:
         if plot_data:
             plt.plot(self.t_ds, self.d, label="Data", color="orange")
 
-        # shaded 1-sigma region
-        plt.fill_between(time,
-                         signal_mean - signal_std,
-                         signal_mean + signal_std,
-                         color=light_blue,
-                         alpha=0.7)  # transparency
+        if shade_1sigma:
+            # shaded 1-sigma region
+            plt.fill_between(time,
+                             signal_mean - signal_std,
+                             signal_mean + signal_std,
+                             color=light_blue,
+                             alpha=0.7)  # transparency
 
-        # shaded 2-sigma region
-        plt.fill_between(time,
-                         signal_mean - 2*signal_std,
-                         signal_mean + 2*signal_std,
-                         color=light_blue,
-                         alpha=0.4)  # transparency
+        if shade_2sigma:
+            # shaded 2-sigma region
+            plt.fill_between(time,
+                             signal_mean - 2*signal_std,
+                             signal_mean + 2*signal_std,
+                             color=light_blue,
+                             alpha=0.4)  # transparency
 
         # plot the mean line on top
         plt.plot(time, signal_mean, color=blue, label=r"Reconstructed signal", lw=2)

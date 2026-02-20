@@ -25,8 +25,8 @@ length_of_windows = 2
 num_of_windows_to_incl = 1
 
 signal_strip_idcs = np.where( (time >= onset - num_of_windows_to_incl*length_of_windows/2) & ( time <= onset + num_of_windows_to_incl*length_of_windows/2) )
-signal_strip_time = time[signal_strip_idcs]  # im taking away the very last element to have a compatible shape with the power spectrum, shouldn't matter
-signal_strip_strain = data_ar[signal_strip_idcs]
+signal_strip_time = time[signal_strip_idcs][:-1]  # im taking away the very last element to have a compatible shape with the power spectrum, shouldn't matter
+signal_strip_strain = data_ar[signal_strip_idcs][:-1]
 
 # 1. Initialize inference scheme
 # strain = strain * tukey(len(strain))
@@ -90,7 +90,7 @@ generative_wavelet = AutoDiffEquationSolver(
     xi_cfm=xi_cfm,
     scaling_constant=scaling_constant,
     tukey_window=True,
-    alpha_dont_change_default_for_legacy_reasons=.1
+    alpha_dont_change_default_for_legacy_reasons=alpha_taper_on_data
 )
 
 mask = DomainCheckAndMask(domain_time=cfm_times, target_time=time)
@@ -98,13 +98,18 @@ s_prime = lambda p: mask(generative_wavelet(p))
 s_prime.domain = generative_wavelet.domain
 s_prime.get_model_components = generative_wavelet.get_model_components
 
-pipe_3.add_custom_signal_model(custom_signal_model=s_prime)
-#
-# for idx in range(5):
-#     print("idx+1: ", idx+1)
-#     sample_waveform, key = draw_and_plot_field_realizations(times=cfm_times, diff_eq_solver_model=generative_wavelet,
-#                                                             omega_op=omega_cfm, gamma_op=gamma_cfm, xi_op=xi_cfm,
-#                                                             key=key)
+pipe_3.add_custom_signal_model(custom_signal_model=s_prime, alpha=alpha_taper_on_data)
+
+posterior_samples_from_other_run = list(unpickle_me_this("debug_latent_samples.pickle"))
+
+plot_prior_samples = False
+if plot_prior_samples:
+    for idx in range(5):
+        print("idx+1: ", idx+1)
+        sample_waveform, key = draw_and_plot_field_realizations(times=cfm_times, diff_eq_solver_model=generative_wavelet,
+                                                                omega_op=omega_cfm, gamma_op=gamma_cfm, xi_op=xi_cfm,
+                                                                key=key)
+
 
 # plt.plot(time, strain, label="Numerical relativity template synth data")
 # plt.plot(cfm_times, sample_waveform, label="Fw model evaluation")
@@ -180,7 +185,7 @@ N_sqrt = NoiseCovarianceFromPs(one_sided_noise_ps=welch_pow_spec, callable_to_ap
 # )
 pipe_3.add_noise_op(inverse_noise_op=N_inv, sqrt_inverse_noise_op=N_sqrt_inv, sqrt_noise_op=N_sqrt)
 
-pipe_3.plot_noise_sample_with_data(1)
+# pipe_3.plot_noise_sample_with_data(1)
 # pipe_3.plot_noise_sample_with_data(1)
 # 4. Get some noise and signal samples
 # wigner_xi_waveform = interpolate_waveform_from_inverted_wigner(pipe_3.t_ss)
@@ -229,13 +234,15 @@ pipe_3.plot_noise_sample_with_data(1)
 # plt.legend()
 # plt.show()
 
-latent_samples, other_stuff = pipe_3.run_inference(kl_iterations=10, use_strict_minimizers=True, out_name="signal_reconstruction_sde_DEBUG",
+pipe_3.set_init_pos(init_pos=posterior_samples_from_other_run[0], plot=True, plot_welch_average=False)
+
+latent_samples, other_stuff = pipe_3.run_inference(kl_iterations=5, use_strict_minimizers=True, out_name="signal_reconstruction_sde_DEBUG",
                                       resume=True, choose_low_kl_starting_pos=False, geoVi=True)
 key = pipe_3.get_current_key()
 
 pipe_3.plot_posterior_signal(plot_default_nrt=True, print_posterior_parameters=True, over_full_signal_space=False,
                              plot_data=False,
-                             xlim=(16.2, 16.46),
+                             # xlim=(16.2, 16.46),
                              save_fig=False,
                              yl=r"$h(t)$ $\mathrm{[10^{-19}]}$")
 

@@ -35,7 +35,7 @@ def draw_realization(operator, sampling_key):
 
 
 def draw_and_plot_field_realizations(times, diff_eq_solver_model, omega_op, gamma_op, xi_op, key, plot=True,
-                                     custom_latent_position=None):
+                                     custom_latent_position=None, tl=""):
 
     N = len(times)
 
@@ -56,7 +56,8 @@ def draw_and_plot_field_realizations(times, diff_eq_solver_model, omega_op, gamm
         return waveform, key
 
 
-    fig, axs = plt.subplots(4, 1)
+    fig, axs = plt.subplots(4, 1, sharex=True)
+    axs[0].set_title(tl)
     axs[0].plot(times, omega, label=r"$\omega$ field sample")
     axs[1].plot(times, gamma, label=r"$\gamma$ field sample")
     axs[2].plot(times, xi, label=r"$\xi$ field sample")
@@ -117,6 +118,9 @@ def plot_posterior(key, times, operator_list, label_list, latent_samples, plot_p
 
         ax.legend()
     fig.axes[0].set_title("Posterior fields (some prior samples in gray)")
+    fig.axes[0].sharex(fig.axes[1])
+    fig.axes[1].sharex(fig.axes[2])
+    fig.axes[2].sharex(fig.axes[3])
     plt.tight_layout()
     if save_fig:
         plt.savefig("posterior.pdf")
