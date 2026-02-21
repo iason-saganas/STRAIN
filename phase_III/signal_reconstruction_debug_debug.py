@@ -53,7 +53,7 @@ signal_prior = StochasticOscillatorPrior(oscillator_prior_dct, signal_time_domai
                                          forceless=not use_driving_force)
 
 oscillator = HarmonicOscillator(signal_domain_times=signal_domain, signal_prior=signal_prior,
-                                tukey_window_alpha=alpha_taper_on_data,  # no taper on the oscillator model itself
+                                tukey_window_alpha=alpha_taper_on_data * 0,  # no taper on the oscillator model itself
                                 normalize=False,
                                 add_global_amp=True,
                                 cfm_envelope=None,
@@ -128,9 +128,9 @@ if noise_variance_check:
     print("Mean variance of samples: ", np.mean(np.var(samples, axis=0)))
 
 
-pipe_3.set_init_pos(init_pos=dict(t0=jnp.float64(0.)), plot=True)
+pipe_3.set_init_pos(init_pos=dict(t0=jnp.float64(0.)), plot=False)
 
-latent_samples, other_stuff = pipe_3.run_inference(kl_iterations=13, use_strict_minimizers=True, out_name="signal_reconstruction_sde_DEBUG_DEBUG",
+latent_samples, other_stuff = pipe_3.run_inference(kl_iterations=12, use_strict_minimizers=True, out_name="signal_reconstruction_sde_DEBUG_DEBUG",
                                       resume=True, choose_low_kl_starting_pos=False, geoVi=True)
 
 t0 = jft.NormalPrior(mean=0, std=0.5, name="t0")
@@ -151,10 +151,16 @@ if plot_results:
 
     pipe_3.plot_posterior_signal(plot_default_nrt=False, print_posterior_parameters=True, over_full_signal_space=False,
                                  plot_data=False,
-                                 xlim=(time_strip.min(), time_strip.max()),
                                  save_fig=False,
                                  maxL_template_xy=(NR.time, NR.strain),
-                                 yl=r"$h(t)$ $\mathrm{[10^{-19}]}$")
+                                 yl=r"$h(t)$ $\mathrm{[10^{-19}]}$", show=False)
+    ax = plt.gca()
+    two_sided_welch_amp = np.sqrt(welch_pow_spec[pipe_3.s_h_dom_expander])
+    whitened_data = whiten(y=strain_strip, amp=two_sided_welch_amp)
+    whitened_data /= whitened_data.max() / NR.strain.max()
+    whitened_data_bp = bandpass(x=time_strip, y=whitened_data, bp=(30, 200))
+    # ax.plot(time_strip, whitened_data, label="Whitened and bandpassed data", ls="-", color="black")
+    thesis_plot(mode="longer", xlim=(time_strip.min(), time_strip.max()))
 
 
     key = plot_posterior(key, times=time_strip, operator_list=[oscillator.omega, oscillator.gamma, oscillator.xi_force, oscillator], latent_samples=latent_samples,

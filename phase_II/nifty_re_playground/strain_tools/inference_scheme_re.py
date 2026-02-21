@@ -997,7 +997,7 @@ class InferenceSchemeRe:
 
     def plot_posterior_signal(self, print_posterior_parameters=False, over_full_signal_space=False,
                               plot_default_nrt=False, maxL_template_xy=None, shade_1sigma=True, shade_2sigma=False,
-                              plot_data=True, **kwargs):
+                              plot_data=True, show=True, **kwargs):
         _, signal_mean_std_ss, _ = (
             self.get_posterior_statistics(print_posterior_parameters))
 
@@ -1074,7 +1074,8 @@ class InferenceSchemeRe:
             maxL_template_x, maxL_template_y = maxL_template_xy
             plt.plot(maxL_template_x, maxL_template_y, "-", label="Maximum likelihood template", color=red)
 
-        thesis_plot(**kwargs, mode="longer")
+        if show:
+            thesis_plot(**kwargs, mode="longer")
 
 
 

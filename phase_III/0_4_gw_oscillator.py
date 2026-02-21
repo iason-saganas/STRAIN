@@ -8,35 +8,33 @@ import matplotlib.pyplot as plt
 from phase_II.nifty_re_playground.strain_tools import *
 from phase_III.strain import *
 import jax
-
 from phase_III.strain.helpers import jft_model_vjp_jvp_stability
 from phase_III.useful.helpers import plot_posterior
 
 jax.config.update("jax_enable_x64", True)
 
-
 key = jax.random.key(34)
 
-inference = StrainSignalInference(
+GW150914 = StrainSignalInference(
     key=key,
     event_name="GW150914",
     detector="H1",
-    data_duration_of_hdf5_file="32sec",
+    data_duration_of_hdf5_file="4096sec",
     stationarity_time_scale=32,
     e_fac=1,
-    r_fac=2,
-    taper_data=True
+    r_fac=1,
+    alpha_taper_on_data=.1
 )
 
-signal_domain = inference.pipe.t_ss
-target_domain = inference.pipe.t_ds
+signal_domain = GW150914.machinery.t_ss
+target_domain = GW150914.machinery.t_ds
 
 oscillator_prior_dct = {
-    "frequency": {"offset_mean": 100, "offset_std": (50, 1e-16), "fluctuations": (1, 1), "loglogavgslope": (-2, 1e-16)},
-    "damping": {"offset_mean": 25, "offset_std": (12.5, 1e-16), "fluctuations": (1e-16, 1e-16), "loglogavgslope": (-2, 1e-16)},
-    "force": {"offset_mean": 0, "offset_std": (1e-16, 1e-16), "fluctuations": (1e3, 1e3), "loglogavgslope": (0, 1)},
-    "global_amplitude": (1e1, 1e1),
-    "init_conditions": (.0, 0.)
+    "frequency": {"offset_mean": 1000, "offset_std": (500, 1e-16), "fluctuations": (1, 1), "loglogavgslope": (-2, 1e-16)},  # log fluctuations...
+    "damping": {"offset_mean": 500, "offset_std": (250, 1e-16), "fluctuations": (1e-16, 1e-16), "loglogavgslope": (-2, 1e-16)},
+    "force": {"offset_mean": 0, "offset_std": (1e-16, 1e-16), "fluctuations": (1, 1), "loglogavgslope": (0, 1e-16), },
+    "global_amplitude": (1, 1),
+    "init_conditions": (0, 0),
 }
 
 signal_prior = StochasticOscillatorPrior(oscillator_prior_dct, signal_time_domain=signal_domain)

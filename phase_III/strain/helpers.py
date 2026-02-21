@@ -54,7 +54,7 @@ def _metadata_basics(o, e, s, det, t_m, t_g, t_d):
 
     :param o:       odir_diagnostic_metadata
     :param e:       event_name
-    :param s:       strain
+    :param s:       strain (object from get_strain_from_disc)
     :param det:     detector
     :param t_m:     T_mini_welch
     :param t_g:     T_global_welch
@@ -72,7 +72,7 @@ def _metadata_basics(o, e, s, det, t_m, t_g, t_d):
         f.write("\nData duration over which reconstruction will occur: " + str(t_m))
         f.write(_metadata_endline())
 
-        f.write(_metadata_title("Welch average kwargs"))
+        f.write(_metadata_title("Welch average kwargs (might differ if scipy welch is used)"))
         for key, value in s.aux.meta.items():
             f.write(f"\n{key}: {value}")
         f.write(_metadata_endline())
@@ -106,8 +106,6 @@ def _error_metadata(o):
         file.write(txt)
         file.close()
 
-
-
 def jft_model_vjp_jvp_stability(fwd:jft.Model, key, num=10):
     """
 
@@ -132,7 +130,6 @@ def jft_model_vjp_jvp_stability(fwd:jft.Model, key, num=10):
     print("Mean error between <J^T v, w> and <v, J w>: ", jnp.mean(jnp.array(error_list)))
     print("Don't forget to get key from `jft_model_vjp_jvp_stability`.")
     return key
-
 
 def _stability_of_jax_vjp_jvp(fwd, primals, tangents):
     """

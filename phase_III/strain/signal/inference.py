@@ -1,6 +1,6 @@
 from matplotlib import pyplot as plt
 from scipy.signal.windows import tukey
-
+from scipy.signal import welch as scipy_welch
 from phase_II.nifty_re_playground.strain_tools import *
 import numpy as np
 import jax.numpy as jnp
@@ -218,7 +218,7 @@ class StrainSignalInference:
                  stationarity_time_scale=32,
                  custom_gps_center=None,
                  diagnostic_plots=True,
-                 taper_data=False
+                 alpha_taper_on_data=.1
                  ):
         """
 
@@ -236,8 +236,8 @@ class StrainSignalInference:
         :param custom_gps_center:               If None, default gps time found in readme file of strain data will be
                                                 used as center. This default will only approximately be the merger time.
         :param diagnostic_plots:                If true, diagnostic plots will be created and stored.
-        :param taper_data:                      As the name suggests; you might want to set this to True for
-                                                consistency's sake if the welch-averaged noise ps is used.
+        :param alpha_taper_on_data:             Data has to be periodic due to how the noise operator is built.
+                                                This is the shape parameter of a Tukey window.
         """
         print("Assumed noise stationarity timescale for Welch-average: ", stationarity_time_scale, " seconds.")
 
@@ -250,70 +250,67 @@ class StrainSignalInference:
         os.makedirs(odir_diagnostic_metadata, exist_ok=True)
         os.makedirs(odir_errors, exist_ok=True)
 
-        tapering_function = lambda d: tukey(M=len(d), alpha=0.1, sym=True)
-        strain = get_strain_from_disc(event_name=event_name, detector=detector,
+        tapering_function = lambda d: tukey(M=len(d), alpha=alpha_taper_on_data, sym=True)
+        event_data = get_strain_from_disc(event_name=event_name, detector=detector,
                                       data_duration=data_duration_of_hdf5_file, center_on_event=True,
                                       desired_duration=stationarity_time_scale, add_whitened_data=True,
                                       tapering_function=tapering_function
                                       )
 
-        f_welch = strain.aux.freqs
-        ps_welch = strain.aux.ps_welch
-        T_mini_welch = max(strain.event_time) - min(strain.event_time)
-        T_global_welch = max(strain.time) - min(strain.time)
+        T_mini_welch = max(event_data.event_time) - min(event_data.event_time)
+        T_global_welch = max(event_data.time) - min(event_data.time)
 
-        NR = get_waveform_template(event_name=event_name, detector=detector, gps_center=strain.gps,
+        NR = get_waveform_template(event_name=event_name, detector=detector, gps_center=event_data.gps_center,
                                    silent=False, plot=False, force_online_fetch=False, model_approximant="IMRPhenomXPHM")
 
-
-        _metadata_basics(o=odir_diagnostic_metadata, e=event_name, s=strain, det=detector, t_m=T_mini_welch, t_g=T_global_welch,
-                         t_d=data_duration_of_hdf5_file)
-        _error_metadata(o=odir_errors)
-        if diagnostic_plots:
-            existing_files = os.listdir(odir_diagnostic_plots)
-
-            plot_1_exists = np.sum(np.array([("whitened_bp_strain" in f) for f in existing_files]).astype(int)).astype(bool)
-            plot_2_exists = np.sum(np.array([("welch_average" in f) for f in existing_files]).astype(int)).astype(bool)
-
-            if not plot_1_exists:
-                _save_plot_wh_bp_data_with_template(o=odir_diagnostic_plots, s=strain, nr=NR, e=event_name)
-            if not plot_2_exists:
-                _save_plot_welch_average(o=odir_diagnostic_plots, f=f_welch, p=ps_welch)
 
         # Attach basic fields
 
         self.key = key
         self.NR = NR
-        self.strain = strain
-        self.ps_welch = ps_welch
-        self.f_welch = f_welch
+        self.event_data = event_data
+        self.f_welch, self.ps_welch = self._get_scipy_welch()
         self.T_mini_welch = T_mini_welch
         self.T_global_welch = T_global_welch
+        self.stationarity_time_scale = stationarity_time_scale  # by construction T_global_welch ?
+        self.alpha_taper_on_data = alpha_taper_on_data
 
         # Create inference scheme object
         self.r_fac = r_fac
         self.e_fac = e_fac
-        d = self.strain.event_strain
-        if taper_data:
-            # Override, delete later and probably match with Welch average
-            tapering_function = lambda d: tukey(M=len(d), alpha=0.5, sym=True)
-            d = tapering_function(d) * d
-        self.pipe = InferenceSchemeRe(t=self.strain.event_time, d=d, e_fac=self.e_fac,
-                                 r_fac=self.r_fac, key=key, plotting_callback=analyze_kl_callback)
+        d = self.event_data.event_strain
+        d = tapering_function(d) * d
+        t = self.event_data.event_time
+        self.machinery = InferenceSchemeRe(t=t, d=d, e_fac=self.e_fac, r_fac=self.r_fac, key=key,
+                                           plotting_callback=analyze_kl_callback)
 
         # Misc
         self.odir_main = odir_main
 
-        # Fields to add later
-        self.noise_ps = None
+        # Metadata
+        _metadata_basics(o=odir_diagnostic_metadata, e=event_name, s=event_data, det=detector, t_m=T_mini_welch,
+                         t_g=T_global_welch,
+                         t_d=data_duration_of_hdf5_file)
+        _error_metadata(o=odir_errors)
+        if diagnostic_plots:
+            existing_files = os.listdir(odir_diagnostic_plots)
+
+            plot_1_exists = np.sum(np.array([("whitened_bp_strain" in f) for f in existing_files]).astype(int)).astype(
+                bool)
+            plot_2_exists = np.sum(np.array([("welch_average" in f) for f in existing_files]).astype(int)).astype(bool)
+
+            if not plot_1_exists:
+                _save_plot_wh_bp_data_with_template(o=odir_diagnostic_plots, s=event_data, nr=NR, e=event_name)
+            if not plot_2_exists:
+                _save_plot_welch_average(o=odir_diagnostic_plots, f=self.f_welch, p=self.ps_welch)
 
 
     def add_signal_model(self, s_model):
-        self.pipe.add_custom_signal_model(custom_signal_model=s_model)
+        self.machinery.add_custom_signal_model(custom_signal_model=s_model)
 
 
     def add_noise_model(self, N_inv, N_sqrt_inv, N_sqrt):
-        self.pipe.add_noise_op(inverse_noise_op=N_inv, sqrt_inverse_noise_op=N_sqrt_inv, sqrt_noise_op=N_sqrt)
+        self.machinery.add_noise_op(inverse_noise_op=N_inv, sqrt_inverse_noise_op=N_sqrt_inv, sqrt_noise_op=N_sqrt)
 
 
     def run(self, kl_iterations=10, n_samples=kl_sampling_rate, use_strict_minimizers=False,
@@ -321,12 +318,39 @@ class StrainSignalInference:
                       **kwargs):
         # See documentation of `InferenceSchemeRe.run_inference`
         out_name = self.odir_main + '/nifty_out/'
-        latent_post_samples, vi_info =  self.pipe.run_inference(kl_iterations=kl_iterations, n_samples=n_samples,
+        latent_post_samples, vi_info =  self.machinery.run_inference(kl_iterations=kl_iterations, n_samples=n_samples,
                                                                 out_name=out_name,
                                                                 use_strict_minimizers=use_strict_minimizers,
                                                                 choose_low_kl_starting_pos=choose_low_kl_starting_pos,
                                                                 max_kl_iter=max_kl_iter, **kwargs)
-        return latent_post_samples, vi_info, self.pipe.get_current_key()
+        return latent_post_samples, vi_info, self.machinery.get_current_key()
+
+
+    def _get_scipy_welch(self):
+        t = np.array(self.event_data.time)
+        x = np.array(self.event_data.strain)  # full, untapered data
+
+        # Stationarity check
+        T = t.max() - t.min()
+        if T > self.stationarity_time_scale:
+            raise ValueError("Gotten data longer than stationarity time scale.")
+
+        x = x - np.mean(x)  # detrend
+        dt = t[1] - t[0]
+        fs = 1.0 / dt
+        k, ps = scipy_welch(
+            x=x,
+            fs=fs,
+            window=("tukey", self.alpha_taper_on_data),
+            nperseg=len(self.T_mini_welch),
+            noverlap=None,  # => Default: 50% overlap
+            detrend='constant',
+            scaling="density",
+            return_onesided=True,  # => Values of negative frequency range added to positive
+        )
+        ps /= 2  # => Therefore divide by two
+        return k, ps
+
 
 class Mask:
     def __init__(self, signal_model, adjoint_zero_padder):
