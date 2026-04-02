@@ -1,4 +1,5 @@
 import jax.numpy as jnp
+import numpy as np
 from scipy.signal.windows import tukey
 import matplotlib.pyplot as plt
 from matplotlib.patches import Rectangle
@@ -129,13 +130,13 @@ def calculate_welch_average(x, y, L=2, leave_out=None, debug=False, output_on_fu
     collection_of_small_datasets_times = []
 
     for left_lim, right_lim in zip(lf_edges_ds1, r_edges_ds1):
-        idcs = jnp.where((x >= left_lim) & (x <= right_lim))
+        idcs = jnp.where((x >= left_lim) & (x < right_lim))  # half open interval => same # points as int(L * fs)
         collection_of_small_datasets_strain.append(y[idcs])
         collection_of_small_datasets_times.append(x[idcs])
 
     if leave_out is not None:
         for left_lim, right_lim in zip(lf_edges_ds2, r_edges_ds2):
-            idcs = jnp.where((x >= left_lim) & (x <= right_lim))
+            idcs = jnp.where((x >= left_lim) & (x < right_lim))
             collection_of_small_datasets_strain.append(y[idcs])
             collection_of_small_datasets_times.append(x[idcs])
     else:
@@ -175,10 +176,35 @@ def calculate_welch_average(x, y, L=2, leave_out=None, debug=False, output_on_fu
     print("\tCompare with area under welch ps: ", (k[1]-k[0])*jnp.sum(ps))
 
     if output_on_full_harmonic_domain:
+        _check_hermitian(ps)
         return k, ps, WINDOWS
     else:
-        mask = (k > 0)
+        mask = (k >= 0)
         return k[mask], ps[mask], WINDOWS
+
+
+def _check_hermitian(amp, tol=1e-12):
+    """
+    Check if a complex FFT array is Hermitian-symmetric.
+    Prints max asymmetry if violated.
+    """
+    N = len(amp)
+
+    # Positive frequencies (exclude DC and Nyquist for even N)
+    if N % 2 == 0:
+        pos = amp[1:N//2]           # skip DC and Nyquist
+        neg = amp[-(N//2)+1:][::-1] # mirrored negative freqs
+    else:
+        pos = amp[1:(N+1)//2]       # skip DC
+        neg = amp[-(N-1)//2:][::-1] # mirrored negative freqs
+
+    max_diff = np.max(np.abs(pos - neg))
+    if max_diff < tol:
+        print("Hermitian symmetry OK. Max difference between pos and neg is ", max_diff)
+        return True
+    else:
+        print(f"Hermitian symmetry violated! Max difference = {max_diff}")
+        return False
 
 
 def get_lr_edges(x, y, L, even):

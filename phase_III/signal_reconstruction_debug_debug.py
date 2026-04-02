@@ -41,7 +41,7 @@ oscillator_prior_dct = {
     "damping": {"offset_mean": 500, "offset_std": (250, 1e-16), "fluctuations": (1e-16, 1e-16), "loglogavgslope": (-2, 1e-16)},
     "force": {"offset_mean": 0, "offset_std": (1e-16, 1e-16), "fluctuations": (1, 1), "loglogavgslope": (0, 1e-16), }, #"flex":(2,2)},
     "global_amplitude": (1, 1),
-    "init_conditions": (0, 0),
+    "init_condition": (0, 0),
 }
 
 use_driving_force = True

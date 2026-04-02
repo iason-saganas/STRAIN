@@ -183,7 +183,7 @@ for r in range(global_peak_refinement_steps):
     latent_peak_posterior_metadata = posterior_latent_peak_info
     old_pipes.append(pipe)
 
-    thesis_plot_3 = False
+    thesis_plot_3 = True
     plot_results = False
     if not pipe_2_called_as_import and plot_results:
 
@@ -284,15 +284,16 @@ for r in range(global_peak_refinement_steps):
         pipe_2.plot_posterior_harmonic_xi_s(custom_ax=ax_21, custom_xi=penrose_xi.real/np.max(penrose_xi.real),
                                             label="")
 
+        cmap = 'seismic'
 
         # Populate imshow plots
         visualize_stress(stress_matrix=S_inference/np.max(S_inference), rows=pipe_2.k_signal_full,
                          cols=pipe_2.t_ss-16.4, smooth=True, custom_ax=ax_12, delay_plot=True,
-                         colorbar_label="Stress (normed)")
+                         colorbar_label="Stress (normed)", cmap=cmap)
 
         visualize_stress(stress_matrix=S_penrose/np.max(S_penrose), rows=pipe_2.k_signal_full,
                          cols=pipe_2.t_ss-16.4, smooth=True, custom_ax=ax_22, delay_plot=True,
-                         colorbar_label="Stress (normed)")
+                         colorbar_label="Stress (normed)", cmap=cmap)
 
 
         # Misc edits

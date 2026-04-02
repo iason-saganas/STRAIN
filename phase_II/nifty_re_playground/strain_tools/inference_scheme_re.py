@@ -1,5 +1,5 @@
 import jax.numpy as jnp
-import nifty.nifty.re as jft
+import nifty.re as jft
 from scipy.signal.windows import tukey
 from typing import Optional, Callable, Literal
 from scipy.interpolate import interp1d
@@ -996,12 +996,17 @@ class InferenceSchemeRe:
 
 
     def plot_posterior_signal(self, print_posterior_parameters=False, over_full_signal_space=False,
-                              plot_default_nrt=False, maxL_template_xy=None, shade_1sigma=True, shade_2sigma=False,
-                              plot_data=True, show=True, **kwargs):
+                              plot_default_nrt=False, custom_ax=None, maxL_template_xy=None, whitened_data=None,
+                              shade_1sigma=True,
+                              shade_2sigma=False, plot_data=False, show=True, **kwargs):
         _, signal_mean_std_ss, _ = (
             self.get_posterior_statistics(print_posterior_parameters))
 
-        _ = plt.figure(figsize=(8,4))
+        if custom_ax is None:
+            _ = plt.figure(figsize=(8,4))
+            ax = plt.gca()
+        else:
+            ax = custom_ax
 
         signal_mean = signal_mean_std_ss[0]
         signal_std = signal_mean_std_ss[1]
@@ -1039,11 +1044,11 @@ class InferenceSchemeRe:
         #     time = self.t_ss
 
         if plot_data:
-            plt.plot(self.t_ds, self.d, label="Data", color="orange")
+            ax.plot(self.t_ds, self.d, label="Data", color="orange")
 
         if shade_1sigma:
             # shaded 1-sigma region
-            plt.fill_between(time,
+            ax.fill_between(time,
                              signal_mean - signal_std,
                              signal_mean + signal_std,
                              color=light_blue,
@@ -1051,14 +1056,18 @@ class InferenceSchemeRe:
 
         if shade_2sigma:
             # shaded 2-sigma region
-            plt.fill_between(time,
+            ax.fill_between(time,
                              signal_mean - 2*signal_std,
                              signal_mean + 2*signal_std,
                              color=light_blue,
                              alpha=0.4)  # transparency
 
+        if whitened_data is not None:
+            wh, lb_wh = whitened_data
+            ax.plot(time, wh, label=lb_wh, color="black", lw=1)
+
         # plot the mean line on top
-        plt.plot(time, signal_mean, color=blue, label=r"Reconstructed signal", lw=2)
+        ax.plot(time, signal_mean, color=blue, label=r"Reconstructed signal", lw=2)
 
         if plot_default_nrt:
             nrt_strain_values = np.loadtxt("/Users/iason/PycharmProjects/STRAIN/data/data_txt/num_rel_template_strain_values.txt") * 1e19
@@ -1067,12 +1076,12 @@ class InferenceSchemeRe:
 
             go_until = np.max(np.where(nrt_time_values<max(self.t_ds)))
 
-            plt.plot(nrt_time_values[:go_until], nrt_strain_values[:go_until], label="LIGO Template",
+            ax.plot(nrt_time_values[:go_until], nrt_strain_values[:go_until], label="LIGO Template",
                      color=red)
 
         if maxL_template_xy is not None:
             maxL_template_x, maxL_template_y = maxL_template_xy
-            plt.plot(maxL_template_x, maxL_template_y, "-", label="Maximum likelihood template", color=red)
+            ax.plot(maxL_template_x, maxL_template_y, "-", label="Maximum likelihood template", color=red)
 
         if show:
             thesis_plot(**kwargs, mode="longer")

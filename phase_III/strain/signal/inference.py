@@ -1,3 +1,4 @@
+from dataclasses import dataclass
 from matplotlib import pyplot as plt
 from scipy.signal.windows import tukey
 from scipy.signal import welch as scipy_welch
@@ -5,16 +6,16 @@ from phase_II.nifty_re_playground.strain_tools import *
 import numpy as np
 import jax.numpy as jnp
 import os
-from typing import Literal
-import nifty.nifty.re as jft
+from typing import Literal, Any, Callable
+import nifty.re as jft
 
 from phase_III.strain.helpers import _save_plot_wh_bp_data_with_template, _save_plot_welch_average, _metadata_basics, _error_metadata
-from phase_III.useful.helpers import create_cfm
+from phase_III.useful.helpers import *
 
-__all__ = ["StrainSignalInference", "StochasticOscillatorPrior", "Mask"]
+__all__ = ["StrainSignalInference", "StochasticOscillatorPrior", "Mask", "_add_peak", "_multiply_op_2_to_op_1"]
 
 class StochasticOscillatorPrior:
-    def __init__(self, prior_dict, signal_time_domain, forceless=False):
+    def __init__(self, prior_dict, signal_time_domain, localize_force=(0., 0.5), couple_force_to_frequency=True):
         """
         Holds information on prior distribution on hyperparameters, assuming these are later fed into a stochastic
         harmonic oscillator solver and constructs correlated fields for the frequency, damping and force fields;
@@ -41,7 +42,6 @@ class StochasticOscillatorPrior:
         :param signal_time_domain:  An array containing the sampling times over which the correlated fields are
                                     defined. Integration will be performed over this domain.
 
-        :param forceless:   Whether to include a driving force
 
         """
         translated_prior_dct = prior_dict.copy()
@@ -67,15 +67,15 @@ class StochasticOscillatorPrior:
         print(
             "If you are unsure this has the desired effect, check samples via `StochasticOscillatorPrior.plot_omega_samples`.")
 
-        self.forceless = forceless
         self.N = len(signal_time_domain)
         self.prior_dct = translated_prior_dct
         self.cfm_times = signal_time_domain
+        self.localize_force = localize_force
+        self.couple_force_to_frequency = couple_force_to_frequency
 
         # Fields to set
-        self.omega, self.gamma, self.xi_force = self._correlated_fields_from_dict_input()
-        self.amplitude = jft.LogNormalPrior(*self.prior_dct["global_amplitude"], name="global_amplitude")
-        self.y0 = self.prior_dct["init_conditions"]
+        self.omega, self.gamma, self.xi_force, self.amplitude, self.y0, self.domains = self._get_priors_from_dict()
+
 
     def plot_omega_samples(self, key):
         print("Ignoring the standard deviation on the standard deviation on offset_mean. You likely want to set this "
@@ -86,126 +86,88 @@ class StochasticOscillatorPrior:
         print("Don't forget to get the key after calling this function.")
         return k
 
-    def _correlated_fields_from_dict_input(self):
+    def _get_priors_from_dict(self):
+        if not 'init_condition' in self.prior_dct.keys():
+            raise ValueError(r'Provide (h_0, \dot{h}_0) for integration.')
 
-        if not self.forceless:
-            names = ["frequency", "damping", "force"]
-        else:
-            names = ["frequency", "damping"]
+        y0 = self.prior_dct["init_condition"]
+
+        names = ["frequency", "damping", "force", "global_amplitude"]
         missing = [n for n in names if n not in self.prior_dct]
-        if missing:
-            raise ValueError(f"Missing keys in prior_dct: {missing}")
 
-        cfm_dicts = {k: self.prior_dct[k] for k in names}
+        operator_container: dict[str, Callable | None] = {
+            "frequency": None,
+            "damping": None,
+            "force": None,
+            "global_amplitude": None,
+        }
+        valid_domains = []
 
-        results = []
-        for name in names:
-            prior = cfm_dicts[name]
+        for op_name in names:
+            if op_name == 'global_amplitude':
+                # not a cfm so handle separately
+                if op_name in missing:
+                    op = lambda p: p * 1
+                else:
+                    op = jft.LogNormalPrior(*self.prior_dct["global_amplitude"], name="global_amplitude")
+                    valid_domains.append(op.domain)
+                operator_container[op_name] = op
+            else:
+                if op_name in missing:
+                    op = lambda p: jnp.zeros(self.N)
+                else:
+                    prior = self.prior_dct[op_name]
+                    op = create_cfm(
+                        time_domain=self.cfm_times,
+                        prefix=f"{op_name}_",
+                        offset_std=prior["offset_std"],
+                        offset_mean=prior["offset_mean"],
+                        fluct=prior["fluctuations"],
+                        llslope=prior["loglogavgslope"],
+                        flex=prior.get("flex", None)  # if no flex provided set to None
+                    )
 
-            results.append(
-                create_cfm(
-                    time_domain=self.cfm_times,
-                    prefix=f"{name}_",
-                    offset_std=prior["offset_std"],
-                    offset_mean=prior["offset_mean"],
-                    fluct=prior["fluctuations"],
-                    llslope=prior["loglogavgslope"],
-                    flex=prior.get("flex", None)
-                )
-            )
-
-        if not self.forceless:
-            log_omega_sq, gamma, xi_force = results
-        else:
-            log_omega_sq, gamma = results
-            xi_force = lambda p: jnp.zeros(self.N)
-
-        def smooth_mask(times, t0, t1, width):
-            return 0.5 * (
-                    jnp.tanh((times - t0) / width)
-                    - jnp.tanh((times - t1) / width)
-            )
-
-        def mask_operator(op):
-            t0 = jft.NormalPrior(mean=-0.2, std=0.2, name="t0")
-            t1 = jft.NormalPrior(mean=+0.2, std=0.2, name="t1")
-            mask_width = jft.LogNormalPrior(mean=1e-2, std=1e-3, name="mask_width")
-            # op_tmp = lambda p: op(p) * smooth_mask(self.cfm_times, t0=-.2, t1=.2, width=.001)
-            op_tmp = lambda p: op(p) * smooth_mask(self.cfm_times, t0=t0(p), t1=t1(p), width=mask_width(p))
-            op_tmp.domain = op.domain | t0.domain | t1.domain | mask_width.domain
-            return op_tmp
-
-        def add_peak(op):
-            t = self.cfm_times
-            t0 = jft.NormalPrior(mean=0, std=0.5, name="t0")
-            # t0 = 0
-            sig = .1
-            A = 1
-            peak_model = lambda p: A*jnp.exp(-(t - t0(p))**2/(2*sig**2))
-            # peak_model = A/jnp.cosh((t-t0)/sig)
-
-            # peak_model_concrete_values = A*jnp.exp(-(t - (-0.10998))**2/(2*sig**2))
-            # plt.plot(self.cfm_times, peak_model_concrete_values)
-            # plt.show()
-            # stop
-
-            op_tmp = lambda p: peak_model(p) * op(p)
-            op_tmp.domain = op.domain | t0.domain
-            return op_tmp
+                    if op_name == "frequency":
+                        # make omega from sq_log_omega
+                        log_sq_omega: Callable = op
+                        op = lambda p: jnp.clip(jnp.sqrt(jnp.exp(log_sq_omega(p))), -jnp.inf, 1e4)
+                        # noinspection PyUnresolvedReferences
+                        op.domain = log_sq_omega.domain
+                    valid_domains.append(op.domain)
+                operator_container[op_name] = op
 
 
-        def mask_inital(op, N_points):
-            mask = jnp.concatenate((jnp.zeros(N_points), jnp.ones(len(self.cfm_times)-N_points)))
-            op_tmp = lambda p: mask * op(p)
-            op_tmp.domain = op.domain
-            return op_tmp
+        omega, gamma, xi_force, amp = [operator_container[name] for name in names]
+
+        if self.couple_force_to_frequency:
+            xi_force = _multiply_op_2_to_op_1(xi_force, omega)
+        if self.localize_force is not None:
+            xi_force, new_dom = _add_peak(xi_force, times=self.cfm_times, prior=self.localize_force)
+            valid_domains.append(new_dom)
+
+        return omega, gamma, xi_force, amp, y0, valid_domains
 
 
-        def op1_as_inverse_of_op2(op1, op2):
-            op_1_tmp = lambda p: 1e2/(op2(p)+1)-1
-            op_1_tmp.domain = op2.domain
-            return op_1_tmp
+def _add_peak(op, times, prior):
+    t = times
+    t0 = jft.NormalPrior(mean=prior[0], std=prior[1], name="t0")
+    # sig = jft.NormalPrior(mean=.1, std=1e-16, name="sig")
+    # t0 = 0
+    sig = .1
+    A = 1
+    peak_model = lambda p: A*jnp.exp(-(t - t0(p))**2/(2*sig**2))
 
+    op_tmp = lambda p: peak_model(p) * op(p)
+    # op_tmp.domain = op.domain | t0.domain | sig.domain
+    op_tmp.domain = op.domain | t0.domain
+    return op_tmp, op_tmp.domain
 
-        def multiply_op_2_to_op_1(op1, op2):
-            # op_1_tmp = lambda p: op1(p)*op2(p)/jnp.max(op2(p))  # normed
-            op_1_tmp = lambda p: op1(p)*op2(p)**2 #  non-normed and squared
-            # op_1_tmp = lambda p: op1(p)*op2(p) #  non-normed
-            op_1_tmp.domain = op1.domain | op2.domain
-            return op_1_tmp
-
-        import jax
-        def give_op_1_smooth_amplitude_boost_with_op_2(op_1, op_2, boost=1e1, bound=1500):
-            def op_1_tmp(p):
-                mask = 1 + (boost - 1) * 0.5 * (1 + jnp.tanh(op_2(p) - bound))
-                jax.debug.print("max boost through mask = {x}", x=jnp.max(mask))
-                return op_1(p) * mask
-
-            op_1_tmp.domain = op_1.domain | op_2.domain
-            return op_1_tmp
-
-
-        # omega = lambda p: jnp.sqrt(jnp.exp(log_omega_sq(p)))
-        omega = lambda p: jnp.clip(jnp.sqrt(jnp.exp(log_omega_sq(p))), -jnp.inf, 1e4)
-        omega.domain = log_omega_sq.domain
-
-        # xi_force, = (mask_operator(op) for op in [xi_force])
-        # xi_force = mask_inital(xi_force, int(len(self.cfm_times)*0.4))
-
-        # omega, _, xi_force = (mask_operator(op) for op in (omega, gamma, xi_force))
-
-        # omega = add_peak(omega)
-        xi_force = multiply_op_2_to_op_1(xi_force, omega)
-        xi_force = add_peak(xi_force)
-
-        # Q = jft.LogNormalPrior(1e2, 1e2, name="quality_factor")
-        # gamma = lambda p: omega(p)**(-1) / jnp.max(omega(p)**(-1)) * Q(p)
-        # gamma.domain = log_omega_sq.domain | Q.domain
-
-        # xi_force = give_op_1_smooth_amplitude_boost_with_op_2(xi_force, omega, boost=1e6)
-
-        return omega, gamma, xi_force
-
+def _multiply_op_2_to_op_1(op1, op2, e=2):
+    # op_1_tmp = lambda p: op1(p)*op2(p)/jnp.max(op2(p))  # normed
+    op_1_tmp = lambda p: op1(p)*op2(p)**e #  non-normed and squared
+    # op_1_tmp = lambda p: op1(p)*op2(p) #  non-normed
+    op_1_tmp.domain = op1.domain | op2.domain
+    return op_1_tmp
 
 class StrainSignalInference:
     def __init__(self,
@@ -218,7 +180,8 @@ class StrainSignalInference:
                  stationarity_time_scale=32,
                  custom_gps_center=None,
                  diagnostic_plots=True,
-                 alpha_taper_on_data=.1
+                 alpha_taper_on_data=.1,
+                 out_name=''
                  ):
         """
 
@@ -241,7 +204,7 @@ class StrainSignalInference:
         """
         print("Assumed noise stationarity timescale for Welch-average: ", stationarity_time_scale, " seconds.")
 
-        odir_main = f"STRAIN_{event_name}_{detector}"
+        odir_main = f"STRAIN_{event_name}_{detector}_{out_name}"
         odir_diagnostic_plots = f"{odir_main}/diagnostic_plots/"
         odir_diagnostic_metadata = f"{odir_main}/diagnostic_metadata/"
         odir_errors = f"{odir_main}/errors/"
@@ -269,23 +232,25 @@ class StrainSignalInference:
         self.key = key
         self.NR = NR
         self.event_data = event_data
-        self.f_welch, self.ps_welch = self._get_scipy_welch()
         self.T_mini_welch = T_mini_welch
         self.T_global_welch = T_global_welch
-        self.stationarity_time_scale = stationarity_time_scale  # by construction T_global_welch ?
         self.alpha_taper_on_data = alpha_taper_on_data
+        self.stationarity_time_scale = stationarity_time_scale  # by construction T_global_welch ?
+        self.f_welch, self.ps_welch = self._get_scipy_welch()
 
         # Create inference scheme object
         self.r_fac = r_fac
         self.e_fac = e_fac
         d = self.event_data.event_strain
+        d = d - jnp.mean(d)  # tetrend
         d = tapering_function(d) * d
         t = self.event_data.event_time
         self.machinery = InferenceSchemeRe(t=t, d=d, e_fac=self.e_fac, r_fac=self.r_fac, key=key,
                                            plotting_callback=analyze_kl_callback)
 
-        # Misc
+        # Misc or to be set
         self.odir_main = odir_main
+        self.oscillator = None
 
         # Metadata
         _metadata_basics(o=odir_diagnostic_metadata, e=event_name, s=event_data, det=detector, t_m=T_mini_welch,
@@ -305,8 +270,9 @@ class StrainSignalInference:
                 _save_plot_welch_average(o=odir_diagnostic_plots, f=self.f_welch, p=self.ps_welch)
 
 
-    def add_signal_model(self, s_model):
-        self.machinery.add_custom_signal_model(custom_signal_model=s_model)
+    def add_signal_model(self, s_model, alpha=0.):
+        self.oscillator = s_model
+        self.machinery.add_custom_signal_model(custom_signal_model=self.oscillator, alpha=alpha)
 
 
     def add_noise_model(self, N_inv, N_sqrt_inv, N_sqrt):
@@ -342,7 +308,7 @@ class StrainSignalInference:
             x=x,
             fs=fs,
             window=("tukey", self.alpha_taper_on_data),
-            nperseg=len(self.T_mini_welch),
+            nperseg=len(self.event_data.event_time),
             noverlap=None,  # => Default: 50% overlap
             detrend='constant',
             scaling="density",
@@ -350,6 +316,37 @@ class StrainSignalInference:
         )
         ps /= 2  # => Therefore divide by two
         return k, ps
+
+    def visualize_results(self, add_processed_data=False, plot_template=True, plot_oscillator_samples=True, **kwargs):
+        t_min = self.event_data.event_time.min()
+        t_max = self.event_data.event_time.max()
+
+        if add_processed_data:
+            welch_amp = np.sqrt(self.ps_welch[self.machinery.s_h_dom_expander])
+            whitened_data = whiten(self.event_data.event_strain, amp=welch_amp)
+            whitened_data_bp = bandpass(x=self.event_data.event_time, y=whitened_data)
+            whitened_data_bp = whitened_data_bp/whitened_data_bp.max() * self.NR.strain.max()
+            pass_to_whitened = (whitened_data_bp, 'Processed data')
+        else:
+            pass_to_whitened = None
+        if plot_template:
+            pass_to_maxL_template = (self.NR.time, self.NR.strain)
+        else:
+            pass_to_maxL_template = None
+        self.machinery.plot_posterior_signal(print_posterior_parameters=True,
+                                             maxL_template_xy=pass_to_maxL_template,
+                                             whitened_data=pass_to_whitened,
+                                             yl=r"$h(t)$ $\mathrm{[10^{-19}]}$",
+                                             **kwargs)
+
+        if plot_oscillator_samples:
+            times = self.machinery.t_ss
+            osc = self.oscillator
+            oscillator_operators_list = [osc.omega, osc.gamma, osc.xi_force, osc]
+            key = plot_posterior(self.machinery.get_current_key(), times=times, operator_list=oscillator_operators_list,
+                                 latent_samples=self.machinery.posterior_xi_samples,
+                                 label_list=["omega", "gamma res", "xi", "waveform"], save_fig=False)
+            return key
 
 
 class Mask:

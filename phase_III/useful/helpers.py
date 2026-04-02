@@ -1,4 +1,6 @@
-import nifty.nifty.re as jft
+import numpy as np
+
+import nifty.re as jft
 import matplotlib.pyplot as plt
 import jax
 import jax.numpy as jnp

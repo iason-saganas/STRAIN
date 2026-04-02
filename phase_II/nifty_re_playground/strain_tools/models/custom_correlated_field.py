@@ -7,16 +7,16 @@ from typing import Callable, Optional, Tuple, Union
 
 import numpy as np
 from jax import numpy as jnp, vmap
-import nifty.nifty.re as jft
+import nifty.re as jft
 
-from nifty.nifty.config import _config
+from nifty.config import _config
 
-from nifty.nifty.re.gauss_markov import IntegratedWienerProcess
-from nifty.nifty.re.logger import logger
-from nifty.nifty.re.misc import wrap
-from nifty.nifty.re.model import Model, WrappedCall
-from nifty.nifty.re.num import lognormal_prior, normal_prior
-from nifty.nifty.re.tree_math import ShapeWithDtype, random_like
+from nifty.re.gauss_markov import IntegratedWienerProcess
+from nifty.re.logger import logger
+from nifty.re.misc import wrap
+from nifty.re.model import Model, WrappedCall
+from nifty.re.num import lognormal_prior, normal_prior
+from nifty.re.tree_math import ShapeWithDtype, random_like
 
 
 __all__ = ["create_cfm", "CustomCorrelatedFieldMaker"]

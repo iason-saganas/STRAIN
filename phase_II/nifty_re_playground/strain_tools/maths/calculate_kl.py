@@ -2,13 +2,13 @@ import jax
 import jax.numpy as jnp
 from functools import partial
 from jax.tree_util import tree_map
-from nifty.nifty.re.evi import Samples
-from nifty.nifty.re.tree_math import get_map, vdot
+from nifty.re.evi import Samples
+from nifty.re.tree_math import get_map, vdot
 from dataclasses import field
-from nifty.nifty.re.model import LazyModel
-from nifty.nifty.re.likelihood import Likelihood
+from nifty.re.model import LazyModel
+from nifty.re.likelihood import Likelihood
 from jax.experimental.shard_map import shard_map
-import nifty.nifty.re as jft
+import nifty.re as jft
 
 
 __all__ = ["calculate_kl_val_and_grad", "get_beneficial_position"]

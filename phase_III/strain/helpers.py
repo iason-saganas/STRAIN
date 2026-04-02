@@ -4,7 +4,7 @@ from phase_II.nifty_re_playground.strain_tools import *
 
 import jax
 import jax.numpy as jnp
-import nifty.nifty.re as jft
+import nifty.re as jft
 
 __all__ = ["_save_plot_wh_bp_data_with_template", "_save_plot_welch_average", "_metadata_basics",
            "jft_model_vjp_jvp_stability", "_error_metadata"]
@@ -27,7 +27,7 @@ def _save_plot_wh_bp_data_with_template(o, s, e, nr):
     plt.xlim(-.1, .1)
     plt.plot(s.event_time, s.event_strain_white_bp, label=f"{e} strain, whitened and bandpassed")
     plt.plot(nr.time, nr.strain / max(nr.strain) * max(s.event_strain_white_bp), label="Scaled best-fit template")
-    thesis_plot(mode="longer", yl="Strain", show=False, save_fig=True, save_path=fn)
+    thesis_plot(mode="longer", yl="Strain", show=False, save_fig=True, save_path=fn, close=True)
 
 def _save_plot_welch_average(o, f, p):
     """
@@ -47,7 +47,7 @@ def _save_plot_welch_average(o, f, p):
     plt.plot(f_pos, ps_pos, color="black", label="")
     plt.loglog()
     thesis_plot(mode="longer", yl="Power", xl=r"Frequency $f$ $\mathrm{[Hz]}$", show=False, save_fig=True, save_path=fn,
-                title="Welch-averaged noise power spectrum")
+                title="Welch-averaged noise power spectrum", close=True)
 
 def _metadata_basics(o, e, s, det, t_m, t_g, t_d):
     """

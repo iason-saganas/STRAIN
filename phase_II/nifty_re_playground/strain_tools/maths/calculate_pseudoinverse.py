@@ -2,7 +2,7 @@ import os
 
 import jax.numpy as jnp
 import numpy as np
-from nifty.nifty.re.conjugate_gradient import static_cg
+from nifty.re.conjugate_gradient import static_cg
 from scipy.signal.windows import tukey
 import operator
 from jax.numpy import fft

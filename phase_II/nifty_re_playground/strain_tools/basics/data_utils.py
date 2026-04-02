@@ -294,7 +294,8 @@ def DEPR_get_strain_data(gw_name = 'GW150914', detector = 'H1', duration = 32, u
     return unpack_centered(strain_series, gps_time, duration=duration, center_at=center_at)
 
 
-def whiten(y:np.array, amp:np.array, tapering_function=lambda d: tukey(M=len(d), alpha=0.1, sym=True)):
+def whiten(y:np.array, amp:np.array, tapering_function=lambda d: tukey(M=len(d), alpha=0.1, sym=True),
+           take_real=True):
     """
 
     :param y:                       The real-space data to whiten.
@@ -306,7 +307,11 @@ def whiten(y:np.array, amp:np.array, tapering_function=lambda d: tukey(M=len(d),
     y = y*tapering_function(y)
     y_harmonic = np.fft.fft(y)
     whitened_y_harmonic = y_harmonic / amp
-    return np.fft.ifft(whitened_y_harmonic).real
+    if take_real:
+        return np.fft.ifft(whitened_y_harmonic).real
+    else:
+        return np.fft.ifft(whitened_y_harmonic)
+
 
 
 def bandpass(x, y, bp=(35, 350)):

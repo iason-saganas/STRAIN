@@ -1,7 +1,7 @@
 import jax.numpy as jnp
 from jax import vmap
 import matplotlib.pyplot as plt
-import nifty.nifty.re as jft
+import nifty.re as jft
 import numpy as np
 
 from ..basics.common_utils import fw_hartley, bw_hartley, raise_warning

@@ -1,7 +1,7 @@
 import pickle
 import warnings
 import jax.numpy as jnp
-import nifty.nifty.re as jft
+import nifty.re as jft
 import jax
 import matplotlib.pyplot as plt
 import numpy as np
@@ -131,10 +131,22 @@ def plot_histogram(key, mean: float, sigma: float, n_samples: int, bins=200, mod
             tl += "; custom function applied sample-wise!"
         else:
             tl += "; " + apply_func_descriptive_string
+    print("Mean and variance of samples:", np.mean(op_samples), np.var(op_samples))
+    print("Interval containing ~68% of prob. mass: ", _hdi(op_samples))
     plt.hist(op_samples, bins=bins,
              histtype='step', facecolor='white', color="black")
     thesis_plot(mode="longer", xl="Value", yl="Number", title=tl)
     return key
+
+def _hdi(samples, mass=0.6827):
+    # x = np.sort(samples)
+    # N = len(x)
+    # m = int(np.floor(mass * N))
+    # widths = x[m:] - x[:N-m]
+    # i = np.argmin(widths)
+    # return x[i], x[i+m]
+    low, high = np.quantile(samples, [0.1587, 0.8413])
+    return low, high
 
 
 class Logger:

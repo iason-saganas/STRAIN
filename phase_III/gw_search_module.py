@@ -156,11 +156,10 @@ class GwSearch:
         welch_averages = []
         windows_of_all_segments = []  # elements (segment_idx, time_window, strain_window) for ALL segments
         for segment_idx, (t,s) in enumerate(zip(segment_times, segment_strains)):
-            freqs, welch_ps, windows = calculate_welch_average(x=t, y=s, L=T_mini_welch, output_on_full_harmonic_domain=True,
-                                                               debug=debug_welch_average_plots)
+            freqs, welch_ps, windows = calculate_welch_average(x=t, y=s, L=T_mini_welch,
+                                                                             output_on_full_harmonic_domain=True,
+                                                                             debug=debug_welch_average_plots)
 
-            welch_ps = welch_ps[:-1]  # seems like the absolute value maximum is repeated twice, so f is
-            # [0, +f_nyq, ..., -f_nyq] instead of [0, +f_nyq, ..., -f_nyq)
             # windows is a list, such that:
             # first_window = windows[0]
             # time_in_first_window, strain_in_first_window = first_window
@@ -193,7 +192,7 @@ class GwSearch:
         self.num_segments = num_segments
         self.debug_plots = debug_plots
         self.welch_averages = welch_averages
-        self.freqs = freqs[:-1]  # my welch average method includes both positive and negative nyquist.
+        self.freqs = freqs
 
         # Derived fields or to be set
         self.fs = 1 / (self.global_time[1] - self.global_time[0])
@@ -344,7 +343,7 @@ class GwSearch:
         plt.show()
 
 
-    def plot_wigner_for_segment(self, segment_idx, return_segment_data=False, plot=True, padding=0.):
+    def plot_wigner_for_segment(self, segment_idx, return_segment_data=False, plot=True, padding=0., plot_fourier=False):
         windows_of_all_overlapping_segments = self.get_overlapping_window_segments()
         _, t, s = [seg for seg in windows_of_all_overlapping_segments if seg[0]==segment_idx][0]
 
@@ -353,7 +352,14 @@ class GwSearch:
         welch_ps_idx = self._get_welch_index(t, s)
         welch_to_use = self.welch_averages[welch_ps_idx]
         amp = np.sqrt(welch_to_use)
-        whitened_data = whiten(y=s, amp=amp)
+        whitened_data = whiten(y=s, amp=amp, take_real=False)
+
+        if whitened_data.imag.max() < 1e-5:
+            whitened_data = whitened_data.real
+        else:
+            raise ValueError("Whitened data has considerable imaginary part. Hermitian symmetry is probably\n"
+                             "broken at some point.")
+
         print("Calculating stress and associated quantities for segment with index No. ", segment_idx)
         stress, dual_time, dual_freq = Stress_jft(xi=whitened_data, time=t, supress_print=True)
         # stress, dual_time, dual_freq = Stress_jft_experimental(xi=whitened_data, time=t, supress_print=True,
@@ -366,7 +372,7 @@ class GwSearch:
         SWP = stress_smoothed.real**2
 
         if plot:
-            fig, axs = plt.subplots(nrows=2, ncols=2, sharex=False, sharey=False)
+            fig, axs = plt.subplots(nrows=3, ncols=2, sharex=False, sharey=False)
             axs[0][1].sharex(axs[0][0])
             axs[1][0].sharex(axs[0][0])
             axs[0][1].sharey(axs[0][0])
@@ -381,14 +387,23 @@ class GwSearch:
             axs[1][1].vlines([t[0]+self.signal_duration_overlap,t[-1]-self.signal_duration_overlap],ymin=0,
                              ymax=dc_line.max(), label="Overlap boundaries", color=red)
 
+            axs[2][0].loglog(self.freqs, welch_to_use, label="Welch averaged ps")
+            axs[2][0].loglog(self.freqs, np.sqrt(welch_to_use), label="Square root of ps")
+            axs[2][1].plot(self.freqs, np.fft.fft(whitened_data).real, label="FFT of whitened data, real")
+            axs[2][1].plot(self.freqs, np.fft.fft(whitened_data).imag, label="FFT of whitened data, imag", alpha=0.3)
+
             axs[0][0].set_ylabel(r"Frequency $f$ $\mathrm{[Hz]}$")
             axs[1][0].set_ylabel(r"Frequency $f$ $\mathrm{[Hz]}$")
             axs[1][1].set_ylabel(r"Amplitude")
+            axs[2][0].set_ylabel(r"Power")
 
             axs[1][0].set_xlabel(r"Time $t$ $\mathrm{[s]}$")
             axs[1][1].set_xlabel(r"Time $t$ $\mathrm{[s]}$")
+            axs[2][0].set_xlabel(r"Frequency $f$ $\mathrm{[Hz]}$")
 
             axs[1][1].legend()
+            axs[2][0].legend()
+            axs[2][1].legend()
 
             save_figure(save_fig=False, show=True, tight_ly=False)
 
@@ -407,6 +422,27 @@ class GwSearch:
         plt.plot(self.freqs, welch_to_use)
         plt.loglog()
         thesis_plot(mode="longer", xl="Frequency", yl="Power")
+
+
+def _mirror_one_sided(array_one_sided, N, sign_flip=False):
+    """
+    Mirror a one-sided array to full length N (Hermitian symmetry)
+    Works for both even and odd N.
+    """
+    if N % 2 != 0:
+        raise ValueError("Implement N odd, don't simply use current code")
+    else:
+        array_one_sided = np.asarray(array_one_sided)
+        where_nyquist = len(array_one_sided)
+        array_without_endpoints = array_one_sided[1:where_nyquist - 1]
+        reversed_array = array_without_endpoints[::-1]
+        flip_signs = True
+        if flip_signs:
+            reversed_array = -1 * reversed_array
+        merged = np.concatenate((array_one_sided, reversed_array))
+        if len(merged) != N:
+            raise ValueError("mirrored array length must equal data length. You've made some error.")
+        return merged
 
 
 @dataclass

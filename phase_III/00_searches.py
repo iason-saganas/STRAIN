@@ -1,12 +1,11 @@
-from lalburst.snglcoinc import light_travel_time
 
-from gw_search_module import *
-from strain import *
+from phase_III.gw_search_module import *
+from phase_III.strain import *
 import matplotlib.pyplot as plt
 import numpy as np
 
 searching_kwargs = dict(event="GW150914", data_duration="4096sec", desired_maximal_data_duration=32,
-                    random_center=1126259462.4-5, stationarity_time_scale=32, T_mini_welch=4, signal_duration_overlap=0.6,
+                    random_center=1126259462.4-5, stationarity_time_scale=32, T_mini_welch=2, signal_duration_overlap=0.6,
                         debug_plots=False, debug_welch_average_plots=False, out_name="gw_search")
 
 H1_searcher = GwSearch(detector="H1", **searching_kwargs)
@@ -14,6 +13,12 @@ L1_searcher = GwSearch(detector="L1", **searching_kwargs)
 
 H1_searcher.sliding_wigner_function_search()
 L1_searcher.sliding_wigner_function_search()
+
+
+# H1_searcher.plot_segments()
+# H1_searcher.plot_detection_statistic()
+# H1_searcher.plot_wigner_for_segment(segment_idx=14)
+# H1_searcher.plot_wigner_for_segment(segment_idx=8)
 
 fig, axs = plt.subplots(3, 1, figsize=(8., 8.))
 axs[0].sharex(axs[1])
@@ -128,4 +133,4 @@ for edge in time_edges:
 ax.set_xlabel(r"Time $t$ $\mathrm{[s]}$")
 ax.set_ylabel(r"$\mathrm{max}(C(\tau))$")
 ax.legend(frameon=True, loc="upper left")
-save_figure(show=True, save_fig=True, tight_ly=True)
+save_figure(show=True, save_fig=False, tight_ly=True)

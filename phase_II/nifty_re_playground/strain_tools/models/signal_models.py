@@ -1,7 +1,7 @@
-from nifty.nifty.re.prior import NormalPrior, LogNormalPrior, UniformPrior
-from nifty.nifty.re.num import uniform_prior
-from nifty.nifty.re.gauss_markov import IntegratedWienerProcess
-import nifty.nifty.re as jft
+from nifty.re.prior import NormalPrior, LogNormalPrior, UniformPrior
+from nifty.re.num import uniform_prior
+from nifty.re.gauss_markov import IntegratedWienerProcess
+import nifty.re as jft
 from scipy.signal.windows import tukey
 from functools import partial
 import operator
@@ -236,7 +236,7 @@ class BrokenPowerLaw(jft.Model):
         parameter_names = ["pl_slope_left", "pl_slope_right", "k_break", "fluctuations", "peak_power", "sigmoid_width",
                            "envelope_fluctuations", "envelope_loglogavgslope", "flexibility"]
         parameter_names = [f"{model_prefix}{name}" for name in parameter_names]
-        distributions = [LogNormalPrior, NormalPrior, UniformPrior, LogNormalPrior, NormalPrior, UniformPrior,
+        distributions = [NormalPrior, NormalPrior, UniformPrior, LogNormalPrior, NormalPrior, UniformPrior,
                          LogNormalPrior, NormalPrior, LogNormalPrior]
 
 

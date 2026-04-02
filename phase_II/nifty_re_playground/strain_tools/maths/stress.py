@@ -5,7 +5,7 @@ from scipy.signal import find_peaks
 
 import matplotlib.pyplot as plt
 
-import nifty.nifty.cl as ift
+import nifty.cl as ift
 from typing import Literal
 
 from ..basics.common_utils import raise_warning
@@ -38,13 +38,12 @@ def interpolate_waveform_from_inverted_wigner(new_times):
 
 
 
-def Stress_jft(xi, time, supress_print=False, downsample=False, norm="ortho"):
+def Stress_jft(xi, time, supress_print=False, norm="ortho"):
     """
     Implements S_ft, i.e. rows are frequencies and columns are times.
 
     See also nifty8 `Stress` function.
 
-    :param downsample:
     :param xi: jnp.array        A field to calculate the wigner function for. Either of complex or real data type.
                                 If complex, assumed to be in DFT standard order (DC first, then positives then negatives).
     :param time: jnp.array      The real-space time array at which xi (or its iFFT if complex) was sampled at.
@@ -66,11 +65,6 @@ def Stress_jft(xi, time, supress_print=False, downsample=False, norm="ortho"):
 
     if jnp.iscomplexobj(xi):
         xi = iFFT_physical(xi)  # go to real space
-
-    if downsample:
-        step = 2
-        xi = xi[::step]
-        # time = time[::step]
 
     if not supress_print:
         print("\nCalculating stress...")
@@ -439,8 +433,12 @@ def detection_statistic(stress_matrix, raw=False, plot=True, time_var=None, cust
     else:
         SWP = smooth_matrix(X, smoothing_lvl=5).real**2
 
-    where_dc = SWP.shape[0]//2
-    dc_line = SWP[where_dc, :]
+    # where_dc = SWP.shape[0]//2
+    # dc_line = SWP[where_dc, :]
+
+    dc_line = np.sum(SWP, axis=0)
+
+    raise_warning("USING FREQUENCY MARGINALIZED DETECTION STATISTIC")
 
     if normalize:
         dc_line /= np.max(dc_line)

@@ -1,9 +1,11 @@
+from functools import reduce
+
 from scipy.signal.windows import tukey
 import jax.numpy as jnp
-import nifty.nifty.re as jft
+import nifty.re as jft
 import jax
 
-from phase_II.nifty_re_playground.strain_tools import raise_warning
+from phase_II.nifty_re_playground.strain_tools import raise_warning, Stress_jft, visualize_stress
 
 from .inference import StochasticOscillatorPrior
 
@@ -82,8 +84,8 @@ def rk4_sample_t0(times, omega, gamma, xi, y0, t0):
 
 
 class HarmonicOscillator(jft.Model):
-    def __init__(self, signal_domain_times, signal_prior:StochasticOscillatorPrior, normalize=True, add_global_amp=True,
-                 tukey_window_alpha=.0, cfm_envelope=None, sample_initial_time=False):
+    def __init__(self, signal_domain_times, signal_prior:StochasticOscillatorPrior, normalize=False,
+                 tukey_window_alpha=.0, cfm_envelope=None):
         """
 
         Represents a harmonic oscillator of frequency omega(t), damping gamma(t) and driven by xi_force(t).
@@ -94,8 +96,8 @@ class HarmonicOscillator(jft.Model):
                                         priors and generative models.
         :param normalize:               If True, wavelet will be divided by its max such that the maximum amplitude
                                         is controlled by the inferred scaling factor.
-        :param add_global_amp:          Whether to add a global scaling amplitude.
-        :param tukey_window_alpha:
+        :param tukey_window_alpha:      The tukey shape parameter used in the oscillator model on the final waveform.
+                                        Default: no taper.
         """
 
         self.prefix = "h_"
@@ -108,18 +110,11 @@ class HarmonicOscillator(jft.Model):
         self.omega = signal_prior.omega
         self.gamma = signal_prior.gamma
         self.xi_force = signal_prior.xi_force
+        self.amplitude = signal_prior.amplitude
+        self.win = jnp.array(tukey(len(self.evolution_times), alpha=self.alpha))
 
-        if not signal_prior.forceless:
-            self.dom = self.omega.domain | self.gamma.domain | self.xi_force.domain
-        else:
-            self.dom = self.omega.domain | self.gamma.domain
+        self.dom = reduce(lambda d1, d2: d1 | d2, signal_prior.domains)
         self.targ = jax.ShapeDtypeStruct(shape=(self.N_ss,), dtype=jnp.float64)
-
-        if add_global_amp:
-            self.amplitude = signal_prior.amplitude
-            self.dom |= self.amplitude.domain
-        else:
-            self.amplitude = lambda p: 1
 
         if cfm_envelope:
             log_env = create_cfm(signal_domain_times, prefix="envelope_", offset_std=(1e-16,1e-16), offset_mean=0,
@@ -129,14 +124,6 @@ class HarmonicOscillator(jft.Model):
             self.dom |= log_env.domain
         else:
             self.env = lambda p: 1
-
-        if sample_initial_time:
-            self.t0 = jft.NormalPrior(mean=-0.1, std=.001, name="t0")
-            self.dom |= self.t0.domain
-        else:
-            self.t0 = lambda p: jnp.min(self.evolution_times)
-
-        self.win = jnp.array(tukey(len(self.evolution_times), alpha=self.alpha))
 
         if normalize:
             # self.normalize = lambda y, x: y / jnp.trapezoid(y=y, x=x)  # integral normalization
@@ -164,13 +151,16 @@ class HarmonicOscillator(jft.Model):
     def get_model_components(self):
         return lambda x: jnp.nan, {"none" : 1}, self.prefix
 
-    def plot_samples(self, num, key, **kwargs):
+    def plot_samples(self, num, key, show_spectrogram=False, **kwargs):
         for idx in range(num):
             sample_waveform, key = draw_and_plot_field_realizations(times=self.evolution_times,
                                                                     diff_eq_solver_model=self,
                                                                     omega_op=self.omega, gamma_op=self.gamma,
                                                                     xi_op=self.xi_force,
                                                                     key=key, **kwargs)
+            if show_spectrogram:
+                S, t, f = Stress_jft(sample_waveform, time=self.evolution_times)
+                visualize_stress(stress_matrix=S, rows=f, cols=t, smooth=True)
         print("Don't forget to get key from `HarmonicOscillator.plot_samples`")
         return key
 
