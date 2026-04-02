@@ -10,7 +10,7 @@ Data duration over which reconstruction will occur: 1.999755859375
 ******** Welch average kwargs (might differ if scipy welch is used)
 
 L: 2
-final_average_call: <function mean at 0x118661b20>
-tapering_function: <function StrainSignalInference.__init__.<locals>.<lambda> at 0x118cd6480>
+final_average_call: <function mean at 0x10c261b20>
+tapering_function: <function StrainSignalInference.__init__.<locals>.<lambda> at 0x10c8d6480>
 ----------------
 

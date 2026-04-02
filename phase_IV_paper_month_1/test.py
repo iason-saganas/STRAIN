@@ -59,12 +59,15 @@ posterior_latent_samples, final_state_and_params = jft.blackjax_nuts(
     likelihood=GW150914.machinery.build_lh(),
     position=init_pos,
     key=key,
-    n_warmup_steps=100,
-    n_samples=100,
+    n_warmup_steps=3,
+    n_samples=3,
 )
 
-to_save = [posterior_latent_samples, final_state_and_params]
-pickle_me_this("hmc_res", to_save)
+# to_save = [posterior_latent_samples, final_state_and_params]
+# pickle_me_this("hmc_res", to_save)
+
+GW150914.machinery.posterior_xi_samples = posterior_latent_samples
+GW150914.visualize_results(xlim=(-0.1,0.1))
 
 # posterior_latent_samples, vi_info, key = GW150914.run(kl_iterations=5, use_strict_minimizers=False)
 # GW150914.visualize_results(xlim=(-0.1,0.1))
