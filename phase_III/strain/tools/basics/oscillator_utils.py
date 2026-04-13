@@ -1,10 +1,9 @@
-import numpy as np
-
 import nifty.re as jft
 import matplotlib.pyplot as plt
 import jax
 import jax.numpy as jnp
-from phase_II.nifty_re_playground.strain_tools import *
+
+from .plotting import blue, light_blue
 
 def create_cfm(time_domain, prefix, offset_std, offset_mean, fluct, llslope, flex=None):
     """
